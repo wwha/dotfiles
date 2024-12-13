@@ -1,0 +1,32 @@
+# <type>(<scope>): <subject>
+
+# <body>
+
+# <footer>
+
+# Types:
+#   feat     (new feature)
+#   fix      (bug fix)
+#   refactor (refactoring code)
+#   style    (formatting, missing semicolons, etc; no code change)
+#   doc      (changes to documentation)
+#   test     (adding or refactoring tests; no production code change)
+#   chore    (updating grunt tasks etc; no production code change)
+#   perf     (performance improvements)
+#   ci       (continuous integration related)
+#   build    (build system or external dependencies)
+#   revert   (revert to previous commit)
+
+# Subject should:
+#   - be 50 characters or less
+#   - begin with a capital letter
+#   - not end with a period
+#   - be in imperative mood ("Add" not "Added" or "Adds")
+
+# Body should:
+#   - be wrapped at 72 characters
+#   - explain what and why vs. how
+
+# Footer should:
+#   - reference GitHub issues: "Closes #123"
+#   - mention breaking changes: "BREAKING CHANGE: <description>"

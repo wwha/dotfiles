@@ -1,0 +1,45 @@
+#!/bin/zsh
+
+# Colors for output
+autoload -U colors && colors
+
+# Get the commit message file
+local commit_msg_file="$1"
+local commit_source="$2"
+local commit_sha="$3"
+
+# Skip if commit is from merge, squash, or commit -m
+[[ -n "$commit_source" ]] && exit 0
+
+# Get the current branch name
+local branch_name=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Skip for certain branches
+local excluded_branches=(main master dev develop)
+if (( ${excluded_branches[(Ie)$branch_name]} )); then
+    exit 0
+fi
+
+# Get the issue number from branch name (if exists)
+local issue_number
+if [[ "$branch_name" =~ '(issue|bug|feature|feat)[-/]([0-9]+)' ]]; then
+    issue_number="$match[2]"
+fi
+
+# Read the current commit message
+local commit_msg=$(<"$commit_msg_file")
+
+# Only add branch name if not already present
+if [[ "$commit_msg" != *"[$branch_name]"* ]]; then
+    # Preserve any comments
+    local comments=$(grep '^#' "$commit_msg")
+    local content=$(grep -v '^#' "$commit_msg")
+
+    # Create new message
+    {
+        echo "[$branch_name]${issue_number:+ #$issue_number} $content"
+        echo "$comments"
+    } > "$commit_msg_file"
+fi
+
+exit 0

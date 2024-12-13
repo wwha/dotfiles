@@ -1,0 +1,15 @@
+#!/bin/zsh
+
+# Colors for output
+autoload -U colors && colors
+
+# Get the commit message
+commit_msg=$(git log -1 HEAD --pretty=format:%s)
+
+# Show macOS notification
+if command -v osascript &>/dev/null; then
+    osascript -e "display notification \"$commit_msg\" with title \"Git Commit\" subtitle \"✓ Commit Successful\""
+fi
+
+# Print success message
+echo "$fg[green]Commit successful:$reset_color $commit_msg"

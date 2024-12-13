@@ -1,0 +1,132 @@
+### General ###
+# Temporary files
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.tmp/
+*.bak
+
+### IDE/Editor ###
+# VS Code
+.vscode/
+*.code-workspace
+.history/
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+
+### Languages ###
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.env
+.venv
+env/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# C/C++
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+*.dSYM/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.yarn/
+
+### Build ###
+# Build directories
+build/
+dist/
+out/
+target/
+Debug/
+Release/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+### Secrets ###
+# Environment files
+.env
+.env.local
+.env*.local
+
+# Keys and certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.csr
+*.p12
+*.pfx
+
+### Project ###
+# Local configuration
+*.local
+config.local.*
+settings.local.*
+
+# Logs
+*.log
+logs/
+log/
+
+# Dependencies
+vendor/
+third_party/
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Database
+*.sqlite
+*.db
+*.sql
+
+# Documentation
+docs/_build/
+site/
+
+# Test coverage
+coverage/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
