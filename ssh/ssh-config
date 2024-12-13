@@ -1,0 +1,16 @@
+# Include ~/.orbstack/ssh/config
+# Enforce key-based authentication
+PubkeyAuthentication yes
+
+Host *
+  AddKeysToAgent yes
+  UseKeychain yes
+
+Host github.com
+    Hostname ssh.github.com
+    Port 443
+    User git
+Host macmini
+    AddKeysToAgent yes
+    Hostname 10.99.1.60
+    IdentityFile ~/.ssh/id_ed25519

@@ -1,0 +1,43 @@
+# This is a template gitconfig. Personal information should be added in ~/.gitconfig.local
+[include]
+    path = ~/.gitconfig.local
+
+[core]
+	editor = vim
+	quotepath = false
+	excludesfile = ~/git-template/gitignore
+	ignorecase = false
+[diff]
+	ignoresubmodules=dirty
+	tool = vimdiff
+[difftool]
+	prompt = false
+[alias]
+	d = difftool
+[merge]
+	conflictstyle = diff3
+	tool = vimdiff
+[mergetool]
+	prompt = false
+[color]
+	branch = auto
+	diff = auto
+	interactive = auto
+	status = auto
+	grep = auto
+[init]
+	defaultBranch = main
+	templateDir = ~/.git-template
+[commit]
+	template = ~/.git-template/commit-template
+[fetch]
+	prune = true
+[pull]
+	rebase = true
+[push]
+	default = current
+	autoSetupRemote = true
+[rebase]
+	autoStash = true
+[help]
+	autocorrect = 1

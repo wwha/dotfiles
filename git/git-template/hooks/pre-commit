@@ -1,0 +1,86 @@
+#!/bin/zsh
+
+# Colors for output
+autoload -U colors && colors
+
+# Helper functions
+print_error() { echo "$fg[red]ERROR:$reset_color $1" }
+print_warning() { echo "$fg[yellow]WARNING:$reset_color $1" }
+print_info() { echo "$fg[green]INFO:$reset_color $1" }
+
+# Initialize error counter
+typeset -i errors=0
+
+# Function to check file
+check_file() {
+    local file="$1"
+    local ext="${file:e}"  # zsh extension extraction
+
+    # Skip binary files
+    if [[ -n "$(file "$file" | grep "binary")" ]]; then
+        return 0
+    fi
+
+    # Check for trailing whitespace and tabs except for Markdown
+    if [[ ! "$file" =~ \.md$ ]] && grep -nE "([[:space:]]+)$" "$file"; then
+        print_error "Trailing whitespace or tabs in $file"
+        # Remove trailing whitespace and tabs
+        sed -i '' -E 's/[[:space:]]+$//' "$file"
+        ((errors++))
+    fi
+
+    # Check file size (>1MB)
+    local size=$(stat -f%z "$file")
+    if (( size > 1048576 )); then
+        print_warning "File $file is larger than 1MB"
+    fi
+
+    # Language-specific checks
+    case "$ext" in
+        py)
+            # Check Python syntax
+            if command -v python3 &>/dev/null; then
+                python3 -m py_compile "$file" 2>/dev/null || {
+                    print_error "Python syntax error in $file"
+                    ((errors++))
+                }
+            fi
+            ;;
+        cpp|cc|h|hpp)
+            # Check C++ files for common issues
+            if grep -l "using namespace std;" "$file" &>/dev/null; then
+                print_warning "Found 'using namespace std' in $file"
+            fi
+            ;;
+        sh|zsh)
+            # Check shell script syntax
+            if command -v shellcheck &>/dev/null; then
+                shellcheck "$file" || ((errors++))
+            fi
+            ;;
+    esac
+}
+
+# Get list of staged files
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Exit early if no files are staged
+if [[ -z "$staged_files" ]]; then
+    print_info "No files staged for commit"
+    exit 0
+fi
+
+# Check each staged file
+print_info "Checking staged files..."
+echo "$staged_files" | while read -r file; do
+    [[ -f "$file" ]] && check_file "$file"
+done
+
+# Exit with error if any issues were found
+if (( errors > 0 )); then
+    print_error "Found $errors issue(s). Please fix before committing."
+    exit 1
+fi
+
+print_info "All checks passed!"
+exit 0
