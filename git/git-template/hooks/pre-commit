@@ -21,12 +21,16 @@ check_file() {
         return 0
     fi
 
-    # Check for trailing whitespace and tabs except for Markdown
-    if [[ ! "$file" =~ \.md$ ]] && grep -nE "([[:space:]]+)$" "$file"; then
-        print_error "Trailing whitespace or tabs in $file"
-        # Remove trailing whitespace and tabs
-        sed -i '' -E 's/[[:space:]]+$//' "$file"
-        ((errors++))
+    # Check for trailing whitespace and tabs except for Markdown, but skip empty lines
+    if [[ ! "$file" =~ \.md$ ]]; then
+        # Only match lines that have non-whitespace before trailing whitespace
+        if grep -nE "[^[:space:]][[:space:]]+$" "$file"; then
+            print_error "Trailing whitespace or tabs in $file (non-empty lines only)"
+            # Remove trailing whitespace and tabs only from non-empty lines
+            sed -i '' -E '/[^[:space:]]/s/[[:space:]]+$//' "$file"
+            print_warning "Trailing whitespace/tabs removed from $file. Please review and re-stage."
+            ((errors++))
+        fi
     fi
 
     # Check file size (>1MB)
