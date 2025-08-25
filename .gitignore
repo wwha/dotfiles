@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.directory
+
+# Vim
+*.swp
+*.swo
+*.swn
+
+# VSCode
+.vscode/
+
+# JetBrains
+.idea/
+
+# Local config files
+*.local
+local.*
+
+# Log files
+*.log
+
+# Backup files
+*.bak
