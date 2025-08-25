@@ -119,7 +119,7 @@ if [[ ("$TERM_PROGRAM" == "iTerm.app" || "$TERM_PROGRAM" == "Apple_Terminal") &&
         # Check if we're not already in a tmux session
         if [[ -z "$TMUX" ]]; then
             # Attempt to attach to existing session, or create a new one
-            tmux has -t default &> /dev/null 
+            tmux has -t default &> /dev/null
             if [ $? -ne 0 ]; then
                 tmux new-session -s default
             else
@@ -154,3 +154,7 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
