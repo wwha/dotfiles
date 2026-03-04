@@ -46,6 +46,9 @@ fi
 script_name="$1"
 description="${2:-Script description}"
 
+# Sanitize description: remove characters that might break sed or shell
+description=$(echo "$description" | tr -d '"'\''\\')
+
 # Add .sh extension for dotfiles but not for local bin
 dotfiles_script_path="${DOTFILES_SCRIPTS}/${script_name}.sh"
 local_script_path="${SCRIPTS_DIR}/${script_name}"
@@ -62,12 +65,12 @@ fi
 # Create new script from template
 cp "${DOTFILES_SCRIPTS}/script-template.sh" "$dotfiles_script_path"
 
-# Update script name and description
+# Update script name and description using | as delimiter for safety
 sed -i '' \
-    -e "s/script-template.sh/${script_name}.sh/" \
-    -e "s/Template for shell scripts/$description/" \
-    -e "s/\$(git config user.name)/$(git config user.name)/" \
-    -e "s/\$(date +%Y-%m-%d)/$(date +%Y-%m-%d)/" \
+    -e "s|script-template.sh|${script_name}.sh|" \
+    -e "s|Template for shell scripts|$description|" \
+    -e "s|\$(git config user.name)|$(git config user.name)|" \
+    -e "s|\$(date +%Y-%m-%d)|$(date +%Y-%m-%d)|" \
     "$dotfiles_script_path"
 
 # Make script executable

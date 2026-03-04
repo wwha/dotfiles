@@ -297,6 +297,27 @@ endif
 " Map <j,k> to esc
 inoremap jk <Esc>
 
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" => Remote Clipboard (OSC 52)
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" This allows yanking from Vim over SSH/Tmux to the local clipboard.
+" Requires a terminal that supports OSC 52 (e.g., iTerm2, Kitty, Alacritty).
+function! Osc52Yank()
+    let b64 = system('base64 | tr -d "\n"', getreg('@'))
+    let b64 = substitute(b64, '\n', '', 'g')
+    let sequence = "\e]52;c;" . b64 . "\x07"
+    if $TMUX != ''
+        let sequence = "\ePtmux;" . substitute(sequence, "\e", "\e\e", 'g') . "\e\\"
+    endif
+    silent! call writefile([sequence], "/dev/tty", "b")
+endfunction
+
+" Automatically yank to OSC 52 after any yank operation
+augroup osc52
+    autocmd!
+    autocmd TextYankPost * if v:event.operator == 'y' | call Osc52Yank() | endif
+augroup END
+
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " => Spell checking

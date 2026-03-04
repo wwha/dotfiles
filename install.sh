@@ -50,17 +50,26 @@ version() {
 create_symlink() {
     local src="$1"
     local dest="$2"
+    local backup_dir="${HOME}/.dotfiles_backups/$(date +%Y%m%d_%H%M%S)"
 
     [[ ! -e "$src" ]] && {
         print_error "Source file $src does not exist"
         return 1
     }
 
-    # check if dest exist, delete it
-    [[ -e "$dest" ]] && rm -rf "$dest"
+    # If destination exists and is not a symlink, back it up
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+        print_warning "Existing file/directory found at $dest. Backing up..."
+        mkdir -p "$backup_dir"
+        mv "$dest" "$backup_dir/"
+        print_info "Backup created at $backup_dir/$(basename "$dest")"
+    elif [[ -L "$dest" ]]; then
+        # If it's a symlink, just remove it
+        rm "$dest"
+    fi
 
     ln -sf "$src" "$dest"
-    print_info "Created symlink for $(basename $src)"
+    print_info "Created symlink for $(basename "$src")"
 }
 
 # Setup symlinks function
@@ -94,7 +103,7 @@ setup_vim() {
 
     # Install vim-plug if not installed
     if [[ ! -f "$HOME/.vim/autoload/plug.vim" ]]; then
-        print_info "Installing vim-plug..."
+        print_warning "Proceeding to download and install vim-plug from GitHub..."
         curl -fLo "$HOME/.vim/autoload/plug.vim" --create-dirs \
             https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
     fi
@@ -140,8 +149,10 @@ EOF
 # Setup zsh configuration
 setup_zsh() {
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-        print_info "Installing oh-my-zsh..."
-        sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+        print_warning "Proceeding to download and install Oh-My-Zsh from GitHub..."
+        print_info "You may be prompted for your password or to change your default shell."
+        sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
         # Install non-built-in plugins
         local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
         # Install zsh-autosuggestions
@@ -191,7 +202,7 @@ setup_macos() {
 
     # Check if Homebrew is installed, install if not
     if ! command -v brew >/dev/null 2>&1; then
-        print_info "Installing Homebrew..."
+        print_warning "Proceeding to download and install Homebrew from GitHub..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
     # Install required packages
