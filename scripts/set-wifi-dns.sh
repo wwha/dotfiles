@@ -72,8 +72,8 @@ main() {
                 sudo networksetup -setdnsservers "Wi-Fi" "empty"
                 ;;
             manual)
-                sudo networksetup -setmanual "Wi-Fi" 10.99.1.143 255.255.255.0 10.99.1.189
-                sudo networksetup -setdnsservers "Wi-Fi" 198.18.0.2
+                sudo networksetup -setmanual "Wi-Fi" 10.99.1.143 255.255.255.0 10.99.1.60
+                sudo networksetup -setdnsservers "Wi-Fi" 223.6.6.6
                 ;;
             --)
                 shift
