@@ -90,6 +90,9 @@ setup_symlinks() {
 
     # ssh
     create_symlink "${BASEDIR}/ssh/ssh-config" "${HOME}/.ssh/config"
+    if [[ -f "${BASEDIR}/ssh/ssh-config.local" ]]; then
+        create_symlink "${BASEDIR}/ssh/ssh-config.local" "${HOME}/.ssh/config.local"
+    fi
 
     # Create symlinks for all the shell scripts under scripts directory
     for script in "${BASEDIR}/scripts"/*.sh; do
@@ -144,6 +147,35 @@ EOF
 
     print_info "Git template directory set up at $git_template"
     print_info "Global git template configured in gitconfig"
+}
+
+# Setup SSH configuration
+setup_ssh_config() {
+    local ssh_dir="${HOME}/.ssh"
+    local ssh_local="${ssh_dir}/config.local"
+
+    # Create .ssh directory if it doesn't exist
+    if [[ ! -d "$ssh_dir" ]]; then
+        print_info "Creating SSH directory..."
+        mkdir -p "$ssh_dir"
+        chmod 700 "$ssh_dir"
+    fi
+
+    # Only create local config if it doesn't exist
+    if [[ ! -f "$ssh_local" ]]; then
+        print_info "Creating initial local SSH configuration..."
+        cat > "$ssh_local" << EOF
+# Local SSH configuration
+# This file is ignored by Git and can contain sensitive host information.
+
+# Example:
+# Host my-private-server
+#     Hostname 192.168.1.100
+#     User myuser
+EOF
+        chmod 600 "$ssh_local"
+        print_info "Created local SSH configuration at $ssh_local"
+    fi
 }
 
 # Setup zsh configuration
@@ -240,6 +272,7 @@ main() {
     # Set up all components
     setup_vim
     setup_git_config
+    setup_ssh_config
     setup_zsh
     setup_shell_scripts
     setup_symlinks

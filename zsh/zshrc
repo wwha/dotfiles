@@ -116,20 +116,31 @@ setopt HIST_IGNORE_SPACE
 
 # Automatically start tmux in Terminal.app or iTerm.app
 if [[ ("$TERM_PROGRAM" == "iTerm.app" || "$TERM_PROGRAM" == "Apple_Terminal") && "$TERM_PROGRAM" != "vscode" ]]; then
-    # Check if tmux exists
-    if command -v tmux &> /dev/null; then
-        # Check if we're not already in a tmux session
-        if [[ -z "$TMUX" ]]; then
-            # Attempt to attach to existing session, or create a new one
-            tmux has -t default &> /dev/null
-            if [ $? -ne 0 ]; then
-                tmux new-session -s default
-            else
-                # Default exists, create a new session with timestamp
-                tmux new-session -s "session-$(date +%H%M%S)"
-            fi
-        fi
-    else
+    if command -v tmux &> /dev/null && [[ -z "$TMUX" ]]; then
+        _auto_tmux() {
+            while true; do
+                local SESSION_NAME
+                if tmux has -t default 2>/dev/null; then
+                    SESSION_NAME="session-$(date +%H%M%S)"
+                else
+                    SESSION_NAME="default"
+                fi
+                
+                tmux new-session -s "$SESSION_NAME"
+                
+                # After detaching or exiting, check if there's a command to run
+                local NEXT_CMD=$(tmux show-option -qv -t "$SESSION_NAME" @ssh_next 2>/dev/null)
+                if [[ -n "$NEXT_CMD" ]]; then
+                    tmux set-option -qu -t "$SESSION_NAME" @ssh_next 2>/dev/null
+                    eval "$NEXT_CMD"
+                else
+                    break
+                fi
+            done
+        }
+        _auto_tmux
+        unfunction _auto_tmux
+    elif ! command -v tmux &> /dev/null; then
         echo "tmux is not installed. Install it with: brew install tmux"
     fi
 fi
@@ -163,3 +174,34 @@ export NVM_DIR="$HOME/.nvm"
 
 # Load API keys
 [ -f ~/.api_keys ] && source ~/.api_keys
+
+# SSH with tmux handling
+# ssht: detach local tmux and launch tmux on remote
+ssht() {
+    local remote_cmd="tmux attach || tmux new-session"
+    if [[ -n "$TMUX" ]]; then
+        local cmd="ssh -t"
+        for arg in "$@"; do
+            cmd="$cmd ${(q)arg}"
+        done
+        cmd="$cmd ${(q)remote_cmd}"
+        tmux set-option @ssh_next "$cmd"
+        tmux detach-client
+    else
+        ssh -t "$@" "$remote_cmd"
+    fi
+}
+
+# sshp: detach local tmux and don't launch tmux on remote
+sshp() {
+    if [[ -n "$TMUX" ]]; then
+        local cmd="ssh"
+        for arg in "$@"; do
+            cmd="$cmd ${(q)arg}"
+        done
+        tmux set-option @ssh_next "$cmd"
+        tmux detach-client
+    else
+        ssh "$@"
+    fi
+}

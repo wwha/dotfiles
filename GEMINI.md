@@ -55,6 +55,6 @@ Manage dotfiles versions:
 ## Development Conventions
 - **Shell Scripts:** Use `zsh` as the interpreter with strict mode (`set -euo pipefail`).
 - **Git Hooks:** A pre-commit hook is used to prevent trailing whitespace in non-markdown files.
-- **Local Overrides:** Machine-specific settings should be placed in `~/.gitconfig.local` or `~/.api_keys` to avoid committing sensitive or specific data.
+- **Local Overrides:** Machine-specific settings should be placed in `~/.gitconfig.local`, `~/.ssh/config.local`, or `~/.api_keys` to avoid committing sensitive or specific data.
 - **Vim Bindings:** Leader is `,`. Use `jk` in insert mode for `<Esc>`.
 - **Security First:** Always prioritize non-destructive operations and validated inputs in automated scripts.
