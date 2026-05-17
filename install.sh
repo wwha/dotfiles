@@ -238,7 +238,7 @@ setup_macos() {
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
     # Install required packages
-    for pkg in git vim tmux zsh; do
+    for pkg in git vim tmux zsh flake8 black shellcheck llvm markdownlint-cli prettier; do
         if ! command -v "$pkg" >/dev/null 2>&1; then
             print_info "Installing $pkg..."
             brew install "$pkg" || print_error "Failed to install $pkg"
@@ -247,8 +247,15 @@ setup_macos() {
 }
 
 setup_linux() {
-    log_info "Configuring Linux specific settings..."
+    print_info "Configuring Linux specific settings..."
     # Add Linux specific configurations here
+
+    # Install required packages (assuming apt)
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update
+        sudo apt-get install -y git vim tmux zsh flake8 black shellcheck clangd nodejs npm
+        sudo npm install -g markdownlint-cli prettier
+    fi
 
     # Change shell to zsh
     print_info "Changing shell to zsh..."

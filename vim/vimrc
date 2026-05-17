@@ -456,6 +456,8 @@ call plug#begin('~/.vim/plugged')
 
 " Essential plugins
 Plug 'ctrlpvim/ctrlp.vim'              " Fuzzy file finder
+Plug 'scrooloose/nerdtree'             " File explorer
+Plug 'dense-analysis/ale'              " Linter
 Plug 'Exafunction/codeium.vim'         " Code completion
 
 call plug#end()
@@ -472,3 +474,43 @@ imap <C-;>   <Cmd>call codeium#CycleCompletions(1)<CR>
 imap <C-,>   <Cmd>call codeium#CycleCompletions(-1)<CR>
 imap <C-x>   <Cmd>call codeium#Clear()<CR>
 set statusline=%f%m%r%h%w\ [%Y]\ [%{&ff}]\ [%04l,%04v]\ [%p%%]\ [LEN=%L]%{codeium#GetStatusString()}
+
+" ALE Configuration
+let g:ale_linters = {
+\   'python': ['flake8'],
+\   'javascript': ['eslint'],
+\   'sh': ['shellcheck'],
+\   'zsh': ['shellcheck'],
+\   'c': ['clangd'],
+\   'cpp': ['clangd'],
+\   'markdown': ['markdownlint'],
+\}
+
+" Set this variable to 1 to fix files when you save them.
+let g:ale_fix_on_save = 1
+
+let g:ale_fixers = {
+\   '*': ['remove_trailing_lines', 'trim_whitespace'],
+\   'python': ['black'],
+\   'c': ['clang-format'],
+\   'cpp': ['clang-format'],
+\   'markdown': ['prettier'],
+\}
+
+" Linter specific options
+let g:ale_python_flake8_options = '--max-line-length=88'
+let g:ale_markdown_markdownlint_options = '--disable MD013'
+
+" Use a consistent sign for errors and warnings
+let g:ale_sign_error = '>>'
+let g:ale_sign_warning = '--'
+
+" Navigation shortcuts
+nmap <silent> <leader>an <Plug>(ale_next_wrap)
+nmap <silent> <leader>ap <Plug>(ale_previous_wrap)
+nmap <silent> <leader>af :ALEFix<cr>
+
+" NERDTree Configuration
+nnoremap <C-n> :NERDTreeToggle<CR>
+let NERDTreeShowHidden=1
+let NERDTreeIgnore = ['\.pyc$', '\.o$', '\.obj$']

@@ -58,7 +58,16 @@ check_file() {
             ;;
         sh|zsh)
             # Check shell script syntax
-            if command -v shellcheck &>/dev/null; then
+            if head -n 1 "$file" | grep -q "zsh"; then
+                # Use zsh syntax check for zsh scripts
+                if command -v zsh &>/dev/null; then
+                    zsh -n "$file" || {
+                        print_error "Zsh syntax error in $file"
+                        ((errors++))
+                    }
+                fi
+            elif command -v shellcheck &>/dev/null; then
+                # Use shellcheck for other shell scripts
                 shellcheck "$file" || ((errors++))
             fi
             ;;
