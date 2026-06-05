@@ -477,7 +477,7 @@ set statusline=%f%m%r%h%w\ [%Y]\ [%{&ff}]\ [%04l,%04v]\ [%p%%]\ [LEN=%L]%{codeiu
 
 " ALE Configuration
 let g:ale_linters = {
-\   'python': ['flake8'],
+\   'python': ['ruff'],
 \   'javascript': ['eslint'],
 \   'sh': ['shellcheck'],
 \   'zsh': ['shellcheck'],
@@ -491,14 +491,13 @@ let g:ale_fix_on_save = 1
 
 let g:ale_fixers = {
 \   '*': ['remove_trailing_lines', 'trim_whitespace'],
-\   'python': ['black'],
+\   'python': ['ruff', 'ruff_format'],
 \   'c': ['clang-format'],
 \   'cpp': ['clang-format'],
 \   'markdown': ['prettier'],
 \}
 
 " Linter specific options
-let g:ale_python_flake8_options = '--max-line-length=88'
 let g:ale_markdown_markdownlint_options = '--disable MD013'
 
 " Use a consistent sign for errors and warnings

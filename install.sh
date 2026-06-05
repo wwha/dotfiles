@@ -237,9 +237,22 @@ setup_macos() {
         print_warning "Proceeding to download and install Homebrew from GitHub..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    # Install required packages
-    for pkg in git vim tmux zsh flake8 black shellcheck llvm markdownlint-cli prettier; do
-        if ! command -v "$pkg" >/dev/null 2>&1; then
+    # Install required packages (brew package name -> binary name)
+    local -A pkgs
+    pkgs=(
+        git              git
+        vim              vim
+        tmux             tmux
+        zsh              zsh
+        ruff             ruff
+        shellcheck       shellcheck
+        llvm             clang
+        markdownlint-cli markdownlint
+        prettier         prettier
+    )
+    for pkg in ${(k)pkgs}; do
+        local cmd="${pkgs[$pkg]}"
+        if ! command -v "$cmd" > /dev/null 2>&1; then
             print_info "Installing $pkg..."
             brew install "$pkg" || print_error "Failed to install $pkg"
         fi
@@ -253,7 +266,7 @@ setup_linux() {
     # Install required packages (assuming apt)
     if command -v apt-get >/dev/null 2>&1; then
         sudo apt-get update
-        sudo apt-get install -y git vim tmux zsh flake8 black shellcheck clangd nodejs npm
+        sudo apt-get install -y git vim tmux zsh ruff shellcheck clangd nodejs npm
         sudo npm install -g markdownlint-cli prettier
     fi
 
