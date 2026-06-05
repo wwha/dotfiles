@@ -486,6 +486,11 @@ let g:ale_linters = {
 \   'markdown': ['markdownlint'],
 \}
 
+" Disable ALE for .env files to avoid shellcheck warnings
+let g:ale_pattern_options = {
+\   '\.env.*$': {'ale_enabled': 0},
+\}
+
 " Set this variable to 1 to fix files when you save them.
 let g:ale_fix_on_save = 1
 

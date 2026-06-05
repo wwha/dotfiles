@@ -53,6 +53,8 @@ This repository contains my personal dotfiles and configuration management syste
 
 ## Vim
 - Forked from https://github.com/amix/vimrc.
+- Uses ALE (Asynchronous Lint Engine) for real-time linting.
+  - **`.env` Exclusion**: `.env` files are excluded from linting using `g:ale_pattern_options` to prevent `shellcheck` from displaying noisy warnings (e.g., about missing shebangs or variable exports).
 
 ## Zsh
 
