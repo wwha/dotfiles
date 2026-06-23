@@ -198,3 +198,7 @@ sshp() {
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
+
+_zsh_config_dir="${${(%):-%N}:A:h}"
+[ -s "$_zsh_config_dir/rime-ice-update.zsh" ] && source "$_zsh_config_dir/rime-ice-update.zsh"
+unset _zsh_config_dir
