@@ -458,22 +458,12 @@ call plug#begin('~/.vim/plugged')
 Plug 'ctrlpvim/ctrlp.vim'              " Fuzzy file finder
 Plug 'scrooloose/nerdtree'             " File explorer
 Plug 'dense-analysis/ale'              " Linter
-Plug 'Exafunction/codeium.vim'         " Code completion
 
 call plug#end()
 
 " CtrlP
 let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlP'
-
-" Codeium Configuration
-let g:codeium_enabled = v:true
-let g:codeium_disable_bindings = 0
-imap <script><silent><nowait><expr> <C-g> codeium#Accept()
-imap <C-;>   <Cmd>call codeium#CycleCompletions(1)<CR>
-imap <C-,>   <Cmd>call codeium#CycleCompletions(-1)<CR>
-imap <C-x>   <Cmd>call codeium#Clear()<CR>
-set statusline=%f%m%r%h%w\ [%Y]\ [%{&ff}]\ [%04l,%04v]\ [%p%%]\ [LEN=%L]%{codeium#GetStatusString()}
 
 " ALE Configuration
 let g:ale_linters = {
