@@ -30,3 +30,6 @@ local.*
 
 # agy
 .antigravitycli
+
+# Python test artifacts
+__pycache__/

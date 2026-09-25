@@ -74,20 +74,11 @@ check_file() {
     esac
 }
 
-# Get list of staged files
-staged_files=$(git diff --cached --name-only --diff-filter=ACM)
-
-# Exit early if no files are staged
-if [[ -z "$staged_files" ]]; then
-    print_info "No files staged for commit"
-    exit 0
-fi
-
-# Check each staged file
+# NUL delimiters preserve spaces and newlines in staged file names.
 print_info "Checking staged files..."
-echo "$staged_files" | while read -r file; do
+while IFS= read -r -d '' file; do
     [[ -f "$file" ]] && check_file "$file"
-done
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
 
 # Exit with error if any issues were found
 if (( errors > 0 )); then

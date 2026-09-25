@@ -18,7 +18,7 @@ autoload -U colors && colors
 
 # Get the directory where the script is located
 BASEDIR="${0:A:h}"
-BACKUP_DIR="$HOME/dotfiles_backup/$(date +%Y%m%d_%H%M%S)"
+BACKUP_ROOT="$HOME/dotfiles_backup"
 
 # Helper functions
 print_error() { echo "${fg[red]}[ERROR]${reset_color} $1" >&2 }
@@ -61,7 +61,9 @@ backup_dotfiles() {
     print_info "Starting backup process..."
 
     # Create backup directory
-    mkdir -p "$BACKUP_DIR"
+    mkdir -p "$BACKUP_ROOT"
+    local BACKUP_DIR
+    BACKUP_DIR=$(mktemp -d "$BACKUP_ROOT/$(date +%Y%m%d_%H%M%S).XXXXXX")
 
     # Backup dotfiles excluding .git directory
     rsync -av --progress "$BASEDIR/" "$BACKUP_DIR/" \
@@ -83,26 +85,29 @@ recover_from_backup() {
 
     # Prompt for backup selection
     echo -n "Enter backup directory name to recover from: "
-    read backup_name
+    read -r backup_name
+    if [[ -z "$backup_name" || "$backup_name" == */* || "$backup_name" == . || "$backup_name" == .. ]]; then
+        print_error "Invalid backup directory name"
+        return 1
+    fi
 
     local selected_backup="$backup_root/$backup_name"
 
-    if [[ ! -d "$selected_backup" ]]; then
+    if [[ ! -d "$selected_backup" || -L "$selected_backup" ]]; then
         print_error "Invalid backup directory: $backup_name"
         exit 1
     fi
 
     print_info "Recovering from: $selected_backup"
 
-    # Backup current dotfiles before recovery
-    local timestamp=$(date +%Y%m%d_%H%M%S)
-    local pre_recovery_backup="$BASEDIR.pre_recovery.$timestamp"
-    mv "$BASEDIR" "$pre_recovery_backup"
-    print_info "Current dotfiles backed up to: $pre_recovery_backup"
+    # Complete a rollback copy before touching the working files.
+    local pre_recovery_backup
+    pre_recovery_backup=$(mktemp -d "$backup_root/pre-recovery-$(date +%Y%m%d_%H%M%S).XXXXXX")
+    rsync -a "$BASEDIR/" "$pre_recovery_backup/" --exclude='.git'
+    print_info "Current files backed up to: $pre_recovery_backup"
 
-    # Recover from backup
-    mkdir -p "$BASEDIR"
-    rsync -av --progress "$selected_backup/" "$BASEDIR/" \
+    # Overlay files, keeping Git metadata and files absent from the snapshot.
+    rsync -av --checksum "$selected_backup/" "$BASEDIR/" \
         --exclude='.git' \
         --exclude='.DS_Store'
 

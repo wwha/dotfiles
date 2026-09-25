@@ -50,7 +50,7 @@ version() {
 create_symlink() {
     local src="$1"
     local dest="$2"
-    local backup_dir="${HOME}/.dotfiles_backups/$(date +%Y%m%d_%H%M%S)"
+    local backup_dir
 
     [[ ! -e "$src" ]] && {
         print_error "Source file $src does not exist"
@@ -60,7 +60,8 @@ create_symlink() {
     # If destination exists and is not a symlink, back it up
     if [[ -e "$dest" && ! -L "$dest" ]]; then
         print_warning "Existing file/directory found at $dest. Backing up..."
-        mkdir -p "$backup_dir"
+        mkdir -p "${HOME}/.dotfiles_backups"
+        backup_dir=$(mktemp -d "${HOME}/.dotfiles_backups/$(date +%Y%m%d_%H%M%S).XXXXXX")
         mv "$dest" "$backup_dir/"
         print_info "Backup created at $backup_dir/$(basename "$dest")"
     elif [[ -L "$dest" ]]; then
@@ -68,7 +69,8 @@ create_symlink() {
         rm "$dest"
     fi
 
-    ln -sf "$src" "$dest"
+    mkdir -p "${dest:h}"
+    ln -s "$src" "$dest"
     print_info "Created symlink for $(basename "$src")"
 }
 
@@ -96,7 +98,7 @@ setup_symlinks() {
 
     # Create symlinks for all the shell scripts under scripts directory
     for script in "${BASEDIR}/scripts"/*.sh; do
-        create_symlink "$script" "${HOME}/.local/bin/$(basename -s .sh $script)"
+        create_symlink "$script" "${HOME}/.local/bin/${script:t:r}"
     done
 }
 
@@ -183,23 +185,25 @@ setup_zsh() {
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
         print_warning "Proceeding to download and install Oh-My-Zsh from GitHub..."
         print_info "You may be prompted for your password or to change your default shell."
-        sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-
-        # Install non-built-in plugins
-        local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-        # Install zsh-autosuggestions
-        if [[ ! -d "${ZSH_CUSTOM}/plugins/zsh-autosuggestions" ]]; then
-            print_info "Installing zsh-autosuggestions..."
-            git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM}/plugins/zsh-autosuggestions
-        fi
-
-        # Install zsh-syntax-highlighting
-        if [[ ! -d "${ZSH_CUSTOM}/plugins/zsh-syntax-highlighting" ]]; then
-            print_info "Installing zsh-syntax-highlighting..."
-            git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM}/plugins/zsh-syntax-highlighting
-        fi
+        local installer
+        installer=$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)
+        sh -c "$installer" "" --unattended
     else
         print_info "oh-my-zsh is already installed"
+    fi
+
+    # Install non-built-in plugins
+    local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+    # Install zsh-autosuggestions
+    if [[ ! -d "${ZSH_CUSTOM}/plugins/zsh-autosuggestions" ]]; then
+        print_info "Installing zsh-autosuggestions..."
+        git clone https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM}/plugins/zsh-autosuggestions"
+    fi
+
+    # Install zsh-syntax-highlighting
+    if [[ ! -d "${ZSH_CUSTOM}/plugins/zsh-syntax-highlighting" ]]; then
+        print_info "Installing zsh-syntax-highlighting..."
+        git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "${ZSH_CUSTOM}/plugins/zsh-syntax-highlighting"
     fi
 }
 
@@ -211,13 +215,6 @@ setup_shell_scripts() {
     # Create scripts directories
     mkdir -p "$scripts_dir"
     mkdir -p "$dotfiles_scripts"
-
-    # Add scripts directory to PATH if not already there
-    if ! echo "$PATH" | tr ':' '\n' | grep -q "^${scripts_dir}$"; then
-        # Update zshrc to include scripts directory
-        echo '\n# User scripts path' >> "${BASEDIR}/zshrc"
-        echo 'export PATH="${HOME}/.local/bin:${PATH}"' >> "${BASEDIR}/zshrc"
-    fi
 
     # Make scripts executable
     chmod +x "${dotfiles_scripts}/new-script.sh"
@@ -235,7 +232,9 @@ setup_macos() {
     # Check if Homebrew is installed, install if not
     if ! command -v brew >/dev/null 2>&1; then
         print_warning "Proceeding to download and install Homebrew from GitHub..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        local installer
+        installer=$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)
+        /bin/bash -c "$installer"
     fi
     # Install required packages (brew package name -> binary name)
     local -A pkgs
@@ -254,40 +253,26 @@ setup_macos() {
         local cmd="${pkgs[$pkg]}"
         if ! command -v "$cmd" > /dev/null 2>&1; then
             print_info "Installing $pkg..."
-            brew install "$pkg" || print_error "Failed to install $pkg"
+            brew install "$pkg"
         fi
     done
 }
 
-setup_linux() {
-    print_info "Configuring Linux specific settings..."
-    # Add Linux specific configurations here
-
-    # Install required packages (assuming apt)
-    if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update
-        sudo apt-get install -y git vim tmux zsh ruff shellcheck clangd nodejs npm
-        sudo npm install -g markdownlint-cli prettier
-    fi
-
-    # Change shell to zsh
-    print_info "Changing shell to zsh..."
-    chsh -s $(which zsh)
-}
-
 # Main installation
 main() {
+    case "${1:-}" in
+        -h|--help) usage; return ;;
+        -v|--version) version; return ;;
+        "") ;;
+        *) print_error "Unknown option: $1"; return 1 ;;
+    esac
+    if [[ "$(uname)" != Darwin ]]; then
+        print_error "Installation supports macOS only"
+        return 1
+    fi
     print_info "Starting dotfiles installation..."
 
-    # Detect OS and run specific setup
-    case "$(uname)" in
-        "Darwin")
-            setup_macos
-            ;;
-        "Linux")
-            setup_linux
-            ;;
-    esac
+    setup_macos
 
     # Set up all components
     setup_vim

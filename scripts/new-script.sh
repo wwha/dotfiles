@@ -8,7 +8,7 @@ autoload -U colors && colors
 
 # Script directory
 SCRIPTS_DIR="${HOME}/.local/bin"
-DOTFILES_SCRIPTS="${HOME}/.dotfiles/scripts"
+DOTFILES_SCRIPTS="${0:A:h}"
 
 # Helper functions
 print_error() { echo "${fg[red]}ERROR:${reset_color} $1" >&2 }
@@ -44,10 +44,13 @@ if (( $# < 1 )); then
 fi
 
 script_name="$1"
-description="${2:-Script description}"
+description="${2-Script description}"
 
-# Sanitize description: remove characters that might break sed or shell
-description=$(echo "$description" | tr -d '"'\''\\')
+# Descriptions occupy one comment line.
+if [[ "$description" == *$'\n'* || "$description" == *$'\r'* ]]; then
+    print_error "Description must be a single line"
+    exit 1
+fi
 
 # Add .sh extension for dotfiles but not for local bin
 dotfiles_script_path="${DOTFILES_SCRIPTS}/${script_name}.sh"
@@ -57,27 +60,33 @@ local_script_path="${SCRIPTS_DIR}/${script_name}"
 validate_name "$script_name"
 
 # Check if script already exists (either version)
-if [[ -e "$local_script_path" ]] || [[ -e "$dotfiles_script_path" ]]; then
+if [[ -e "$local_script_path" || -L "$local_script_path" ]] || [[ -e "$dotfiles_script_path" || -L "$dotfiles_script_path" ]]; then
     print_error "Script $script_name already exists"
     exit 1
 fi
 
-# Create new script from template
-cp "${DOTFILES_SCRIPTS}/script-template.sh" "$dotfiles_script_path"
-
-# Update script name and description using | as delimiter for safety
-sed -i '' \
-    -e "s|script-template.sh|${script_name}.sh|" \
-    -e "s|Template for shell scripts|$description|" \
-    -e "s|\$(git config user.name)|$(git config user.name)|" \
+# Escape sed replacement metacharacters without discarding user text.
+escape_replacement() {
+    print -rn -- "$1" | sed 's/[\\&|]/\\&/g'
+}
+author=$(git config user.name || true)
+author=${author//$'\n'/ }
+author=${author//$'\r'/ }
+escaped_description=$(escape_replacement "$description")
+escaped_author=$(escape_replacement "$author")
+mkdir -p "$SCRIPTS_DIR"
+sed \
+    -e "s|script-template.sh|${script_name}.sh|g" \
+    -e "s|Template for shell scripts|$escaped_description|" \
+    -e "s|\$(git config user.name)|$escaped_author|" \
     -e "s|\$(date +%Y-%m-%d)|$(date +%Y-%m-%d)|" \
-    "$dotfiles_script_path"
+    "${DOTFILES_SCRIPTS}/script-template.sh" > "$dotfiles_script_path"
 
 # Make script executable
 chmod +x "$dotfiles_script_path"
 
 # Create symlink in .local/bin
-ln -sf "$dotfiles_script_path" "$local_script_path"
+ln -s "$dotfiles_script_path" "$local_script_path"
 
 print_info "Created new script: $dotfiles_script_path"
 print_info "Created symlink: $local_script_path"

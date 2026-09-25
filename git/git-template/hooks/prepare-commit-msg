@@ -5,8 +5,8 @@ autoload -U colors && colors
 
 # Get the commit message file
 local commit_msg_file="$1"
-local commit_source="$2"
-local commit_sha="$3"
+local commit_source="${2:-}"
+local commit_sha="${3:-}"
 
 # Skip if commit is from merge, squash, or commit -m
 [[ -n "$commit_source" ]] && exit 0
@@ -32,13 +32,13 @@ local commit_msg=$(<"$commit_msg_file")
 # Only add branch name if not already present
 if [[ "$commit_msg" != *"[$branch_name]"* ]]; then
     # Preserve any comments
-    local comments=$(grep '^#' "$commit_msg")
-    local content=$(grep -v '^#' "$commit_msg")
+    local comments=$(print -r -- "$commit_msg" | grep '^#')
+    local content=$(print -r -- "$commit_msg" | grep -v '^#')
 
     # Create new message
     {
-        echo "[$branch_name]${issue_number:+ #$issue_number} $content"
-        echo "$comments"
+        print -r -- "[$branch_name]${issue_number:+ #$issue_number} $content"
+        print -r -- "$comments"
     } > "$commit_msg_file"
 fi
 
