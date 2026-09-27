@@ -132,8 +132,9 @@ fi
 ```
 
 Leave agent internet access off. No personal secrets, dotfiles installation, or
-Git hook installation is needed. Cloud edits and runs static checks; macOS CI
-runs behavior tests. Linux personal installation is unsupported.
+Git hook installation is needed. Cloud runs static checks only; passing them does
+not mean the macOS behavior tests passed. Before merging, wait for GitHub's
+`macos-checks` job to succeed. Linux personal installation is unsupported.
 
 After the CI workflow has run successfully, configure protection for `main`:
 
@@ -144,7 +145,7 @@ After the CI workflow has run successfully, configure protection for `main`:
 - Keep auto-merge disabled and retain any existing stricter protections.
 
 Start a small README task in the Cloud environment, review its diff, and create
-its PR (using the task's PR button if needed). Confirm `macos-checks` passes before
-manually merging. This workflow requires no local computer or self-hosted runner
-online. Updating and installing configuration on your Mac remains a separate,
-manual operation. Local unpushed commits are unavailable to Cloud.
+its PR (using the task's PR button if needed). This workflow requires no local
+computer or self-hosted runner online. Updating and installing configuration on
+your Mac remains a separate, manual operation. Local unpushed commits are
+unavailable to Cloud.
