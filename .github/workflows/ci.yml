@@ -15,4 +15,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: command -v tmux >/dev/null || brew install tmux
       - run: zsh tests/check.zsh --all

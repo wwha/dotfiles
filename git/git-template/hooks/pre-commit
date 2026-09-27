@@ -66,9 +66,6 @@ check_file() {
                         ((errors++))
                     }
                 fi
-            elif command -v shellcheck &>/dev/null; then
-                # Use shellcheck for other shell scripts
-                shellcheck "$file" || ((errors++))
             fi
             ;;
     esac

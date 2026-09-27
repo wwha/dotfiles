@@ -6,10 +6,16 @@ Shared configuration is maintained in this repository and installed on personal 
 
 **Shared configuration**: Versioned shell, editor, and tool settings intended to be reused across the owner's Macs.
 
-**Local override**: Machine-specific settings or identity kept outside version control.
+**Local override**: Machine-specific settings, identity or secrets kept outside version control.
 
-**Installation**: Preparing dependencies and linking shared configuration into a user's home directory while preserving local overrides.
+**Installation**: Linking shared configuration into a user's home directory while preserving local overrides and displaced configuration.
 
-**Backup**: A copy of repository files, excluding Git metadata, retained for later recovery.
+**Dependency setup**: Explicit preparation of the packages and plugins used by shared configuration, separate from installation.
 
-**Restore**: Overlaying files from a backup after saving current files; Git metadata and files absent from the backup remain in place.
+**Conflict backup**: The original file, directory or symlink displaced by installation, retained for per-file rollback. A saved symlink does not include its target's contents.
+
+**Repository snapshot**: A legacy copy of working files, excluding Git metadata, retained for recovery. It is not a backup of private HOME configuration.
+
+**Restore**: Overlaying files from a repository snapshot after saving current files; Git metadata and files absent from the snapshot remain in place.
+
+**Activation**: The point when a Mac starts reading a changed shared configuration, including changes reached through existing symlinks.
