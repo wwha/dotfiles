@@ -1,0 +1,9 @@
+# Explicit dependency list; no applications or machine inventory.
+brew "git"
+brew "vim"
+brew "tmux"
+brew "zsh"
+brew "ruff"
+brew "llvm"
+brew "markdownlint-cli"
+brew "prettier"

@@ -44,7 +44,7 @@ class Scripts(unittest.TestCase):
         self.assertEqual(list(self.home.iterdir()), [])
 
     def prepare_install(self):
-        for cmd in ('git', 'vim', 'tmux', 'ruff', 'shellcheck', 'clang', 'markdownlint', 'prettier'):
+        for cmd in ('git', 'vim', 'tmux', 'ruff', 'clang', 'markdownlint', 'prettier'):
             self.stub(cmd, 'exit 0')
         (self.home / '.vim/autoload').mkdir(parents=True)
         (self.home / '.vim/autoload/plug.vim').touch()
@@ -65,7 +65,7 @@ class Scripts(unittest.TestCase):
         self.assertEqual((self.home / '.gitconfig.local').read_text(), 'existing identity')
         self.assertEqual((self.home / '.ssh/config.local').read_text(), 'existing hosts')
         self.assertEqual((self.home / '.vimrc').resolve(), self.repo / 'vim/vimrc')
-        self.assertEqual((self.home / '.local/bin/new-script').resolve(), self.repo / 'scripts/new-script.sh')
+        self.assertFalse((self.home / '.local/bin/new-script').exists())
         self.assertTrue(any(p.read_text() == 'old vim' for p in (self.home / '.dotfiles_backups').glob('*/.vimrc')))
         self.assertFalse((self.repo / 'zshrc').exists())
         self.assertEqual((self.repo / 'zsh/zshrc').read_bytes(), before)
@@ -77,11 +77,241 @@ class Scripts(unittest.TestCase):
         self.assertIn('macOS', result.stderr)
         self.assertEqual(list(self.home.iterdir()), [])
 
-    def test_install_stops_on_dependency_failure(self):
+    def test_install_is_offline_and_does_not_distribute_legacy_tools(self):
         result = self.run_script('install.sh')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((self.home / '.gitconfig').exists())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.home / '.gitconfig').is_symlink())
+        self.assertTrue((self.home / '.ssh/config').is_symlink())
+        self.assertFalse((self.home / '.local/bin').exists())
+        self.assertFalse((self.home / '.git-template/hooks').exists())
         self.assertFalse((self.home / '.vim').exists())
+        self.assertFalse((self.home / '.gitconfig.local').exists())
+
+    def test_install_completes_partial_template_without_replacing_custom_files(self):
+        template = self.home / '.git-template'
+        (template / 'hooks').mkdir(parents=True)
+        (template / 'hooks/pre-commit').write_text('private hook')
+        (template / 'gitignore').write_text('private ignore')
+        result = self.run_script('install.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((template / 'gitignore').read_text(), 'private ignore')
+        self.assertEqual((template / 'hooks/pre-commit').read_text(), 'private hook')
+        self.assertEqual((template / 'commit-template').resolve(),
+                         self.repo / 'git/git-template/commit-template')
+
+    def test_dry_run_preserves_conflicts_and_creates_nothing(self):
+        (self.home / '.vimrc').write_text('original')
+        (self.home / '.tmux.conf').symlink_to('missing')
+        before = sorted(p.name for p in self.home.iterdir())
+        result = self.run_script('install.sh', '--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Would back up:', result.stdout)
+        self.assertIn('Would link:', result.stdout)
+        self.assertEqual(sorted(p.name for p in self.home.iterdir()), before)
+        self.assertEqual((self.home / '.vimrc').read_text(), 'original')
+        self.assertEqual(os.readlink(self.home / '.tmux.conf'), 'missing')
+
+    def test_install_backs_up_links_and_directories_without_following(self):
+        (self.home / '.vimrc').symlink_to('missing')
+        (self.home / '.tmux.conf').mkdir()
+        (self.home / '.tmux.conf/marker').write_text('keep')
+        target = self.base / 'external'
+        target.write_text('external')
+        (self.home / '.zshrc').symlink_to(target)
+        result = self.run_script('install.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        backups = self.home / '.dotfiles_backups'
+        saved_link = next(p / '.vimrc' for p in backups.iterdir() if (p / '.vimrc').is_symlink())
+        self.assertEqual(os.readlink(saved_link), 'missing')
+        saved_directory = next(backups.glob('*/.tmux.conf'))
+        self.assertEqual((saved_directory / 'marker').read_text(), 'keep')
+        self.assertEqual(os.readlink(next(backups.glob('*/.zshrc'))), str(target))
+        self.assertEqual(target.read_text(), 'external')
+        self.assertTrue(all(p.stat().st_mode & 0o777 == 0o700 for p in backups.iterdir()))
+        # Demonstrate rollback: replace the installed link with the saved directory.
+        (self.home / '.tmux.conf').unlink()
+        saved_directory.rename(self.home / '.tmux.conf')
+        self.assertEqual((self.home / '.tmux.conf/marker').read_text(), 'keep')
+
+    def test_existing_install_keeps_legacy_links_and_local_overrides(self):
+        # Reproduce the old installer's public layout, including its template symlink.
+        for name, source in {'.zshrc': 'zsh/zshrc', '.vimrc': 'vim/vimrc',
+                             '.tmux.conf': 'tmux/tmux.conf', '.gitconfig': 'git/git-config',
+                             '.git-template': 'git/git-template'}.items():
+            (self.home / name).symlink_to(self.repo / source)
+        (self.home / '.ssh').mkdir()
+        (self.home / '.ssh/config').symlink_to(self.repo / 'ssh/ssh-config')
+        (self.home / '.local/bin').mkdir(parents=True)
+        for name in ('new-script', 'script-template', 'set-wifi-dns'):
+            (self.home / '.local/bin' / name).symlink_to(self.repo / f'scripts/{name}.sh')
+        locals = ('.gitconfig.local', '.ssh/config.local', '.zshrc.local',
+                  '.vimrc.local', '.tmux.conf.local', '.api_keys')
+        for name in locals:
+            (self.home / name).write_text('private ' + name)
+            (self.home / name).chmod(0o600)
+        (self.repo / 'ssh/ssh-config.local').write_text('must not replace HOME local')
+        links = {p: (os.readlink(p), p.lstat().st_mtime_ns)
+                 for p in self.home.rglob('*') if p.is_symlink()}
+        for _ in range(2):
+            result = self.run_script('install.sh')
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for p, before in links.items():
+            self.assertEqual((os.readlink(p), p.lstat().st_mtime_ns), before)
+            self.assertTrue(p.exists())
+        for name in locals:
+            self.assertEqual((self.home / name).read_text(), 'private ' + name)
+            self.assertEqual((self.home / name).stat().st_mode & 0o777, 0o600)
+        self.assertFalse((self.home / '.dotfiles_backups').exists())
+        for name in ('script-template', 'set-wifi-dns'):
+            result = self.run_script(str(self.home / '.local/bin' / name), '--help')
+            self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.run_script(str(self.home / '.local/bin/new-script'), 'migration-probe')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_dependency_failure_does_not_link_configuration(self):
+        result = self.run_script('install-deps.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_git_local_override_and_installed_ignore(self):
+        result = self.run_script('install.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.env.pop('GIT_CONFIG_GLOBAL')
+        (self.home / '.gitconfig.local').write_text('[core]\n editor = local-editor\n')
+        self.assertEqual(self.git('config', '--get', 'core.editor').stdout.strip(), 'local-editor')
+        self.git('init', '--template=')
+        ignored = self.git('check-ignore', '.DS_Store').stdout.strip()
+        self.assertEqual(ignored, '.DS_Store')
+        self.assertEqual(self.git('config', '--path', '--get', 'core.excludesfile').stdout.strip(),
+                         str(self.home / '.git-template/gitignore'))
+
+    def test_vim_without_plugins_loads_local_override(self):
+        (self.home / '.vimrc.local').write_text('set tabstop=7\n')
+        script = self.base / 'probe.vim'
+        output = self.base / 'vim-result'
+        script.write_text("call writefile([string(&tabstop), string(g:ale_linters['zsh']), string(g:ale_linters['sh'])], '" +
+                          str(output) + "')\nqa!\n")
+        result = subprocess.run(['/usr/bin/vim', '-N', '-u', str(self.repo / 'vim/vimrc'),
+                                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output.read_text(), '7\n[]\n[]\n')
+
+    def test_zsh_preserves_initializers_and_local_override(self):
+        for name, body in {
+            '.oh-my-zsh/oh-my-zsh.sh': 'export OMZ_LOADED=yes',
+            'miniconda3/bin/conda': '#!/bin/sh\nprintf "export CONDA_LOADED=yes\\n"',
+            '.nvm/nvm.sh': 'export NVM_LOADED=yes',
+            '.api_keys': 'export TEST_API_KEY=fixture',
+            '.zshrc.local': 'export HOMEBREW_NO_ANALYTICS=local',
+        }.items():
+            p = self.home / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(body + '\n')
+            p.chmod(0o700)
+        env = dict(self.env, TERM_PROGRAM='test', TMUX='', SSH_CONNECTION='')
+        result = subprocess.run(['/bin/zsh', '-f', '-c',
+                                 'source "$1"; print -r -- "$OMZ_LOADED $CONDA_LOADED $NVM_LOADED $TEST_API_KEY $HOMEBREW_NO_ANALYTICS"',
+                                 'probe', str(self.repo / 'zsh/zshrc')],
+                                env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'yes yes yes fixture local')
+        self.assertEqual(result.stderr, '')
+
+    def test_bun_is_opt_in_through_local_override(self):
+        (self.home / '.bun').mkdir()
+        (self.home / '.bun/_bun').write_text('export BUN_LOADED=yes\n')
+        env = dict(self.env, TERM_PROGRAM='test', TMUX='', SSH_CONNECTION='')
+        for name in ('BUN_INSTALL', 'BUN_LOADED'):
+            env.pop(name, None)
+        probe = 'source "$1"; print -r -- "${BUN_INSTALL:-absent}|${BUN_LOADED:-absent}|${path[(Ie)$HOME/.bun/bin]}"'
+        def load():
+            return subprocess.run(['/bin/zsh', '-f', '-c', probe, 'probe', str(self.repo / 'zsh/zshrc')],
+                                  env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        result = load()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'absent|absent|0')
+        (self.home / '.zshrc.local').write_text(
+            'export BUN_INSTALL="$HOME/.bun"\n'
+            'export PATH="$BUN_INSTALL/bin:$PATH"\n'
+            '[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"\n')
+        result = load()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), str(self.home / '.bun') + '|yes|1')
+
+    def test_pre_commit_skips_shellcheck_but_checks_zsh_syntax(self):
+        self.git('init', '--template=')
+        self.stub('shellcheck', 'touch "$HOME/shellcheck-called"; exit 91')
+        (self.repo / 'example.sh').write_text('#!/bin/sh\necho "$value"\n')
+        self.git('add', 'example.sh')
+        result = self.run_script('git/git-template/hooks/pre-commit')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.home / 'shellcheck-called').exists())
+        (self.repo / 'broken.zsh').write_text('#!/bin/zsh\nif then\n')
+        self.git('add', 'broken.zsh')
+        result = self.run_script('git/git-template/hooks/pre-commit')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Zsh syntax error', result.stdout)
+        self.assertFalse((self.home / 'shellcheck-called').exists())
+
+    def test_tmux_loads_local_override_and_copies_with_pbcopy(self):
+        tmux = shutil.which('tmux')
+        if not tmux:
+            tmux = next((p for p in ('/opt/homebrew/bin/tmux', '/usr/local/bin/tmux')
+                         if Path(p).is_file()), None)
+        if not tmux:
+            self.skipTest('tmux is not installed')
+        socket_dir = tempfile.TemporaryDirectory(prefix='df-tmux-', dir='/tmp')
+        self.addCleanup(socket_dir.cleanup)
+        socket = str(Path(socket_dir.name) / 'socket')
+        env = dict(self.env)
+        env.pop('TMUX', None)
+        def tmux_run(*args):
+            return subprocess.run([tmux, '-S', socket, *args], env=env, cwd=self.repo,
+                                  text=True, capture_output=True, timeout=10)
+        self.addCleanup(lambda: tmux_run('kill-server'))
+        started = tmux_run('-f', '/dev/null', 'new-session', '-d', '-s', 'test', '/bin/sleep 60')
+        self.assertEqual(started.returncode, 0, started.stderr)
+        # tmux may report socket creation failure on stderr while exiting with 0.
+        self.assertEqual(started.stderr, '', 'Isolated tmux server failed: ' + started.stderr)
+        (self.home / '.tmux.conf.local').write_text('set -g display-panes-time 3456\n')
+        result = tmux_run('source-file', str(self.repo / 'tmux/tmux.conf'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, '')
+        self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '3456')
+        command = tmux_run('show-options', '-sv', 'copy-command').stdout.strip()
+        self.assertTrue(command)
+        self.stub('pbcopy', 'cat > "$HOME/copied"')
+        self.stub('xclip', 'touch "$HOME/unexpected-xclip"; exit 91')
+        copied = subprocess.run(['/bin/sh', '-c', command], input='clipboard text',
+                                env=env, text=True, capture_output=True, timeout=10)
+        self.assertEqual(copied.returncode, 0, copied.stderr)
+        self.assertEqual((self.home / 'copied').read_text(), 'clipboard text')
+        self.assertFalse((self.home / 'unexpected-xclip').exists())
+
+    def test_dependencies_are_explicit_repeatable_and_preserve_zshrc(self):
+        (self.home / '.zshrc').write_text('keep shell config')
+        self.stub('brew', 'printf "%s\\n" "$@" >> "$HOME/brew-args"')
+        self.stub('curl', '''
+            echo curl >> "$HOME/downloads"
+            case "$*" in
+                *plug.vim*) mkdir -p "$HOME/.vim/autoload"; touch "$HOME/.vim/autoload/plug.vim" ;;
+                *ohmyzsh*) printf '%s\\n' '[ "$KEEP_ZSHRC" = yes ] && [ "$RUNZSH" = no ] && [ "$CHSH" = no ] || exit 92' 'mkdir -p "$HOME/.oh-my-zsh"' ;;
+                *) exit 93 ;;
+            esac
+        ''')
+        self.stub('git', '''
+            [ "$1" = clone ] || exit 94
+            echo clone >> "$HOME/downloads"
+            mkdir -p "$3"
+        ''')
+        for _ in range(2):
+            result = self.run_script('install-deps.sh')
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / '.zshrc').read_text(), 'keep shell config')
+        self.assertEqual((self.home / 'downloads').read_text().splitlines(), ['curl', 'curl', 'clone', 'clone'])
+        self.assertIn('--file=' + str(self.repo / 'Brewfile'), (self.home / 'brew-args').read_text())
+        self.assertFalse((self.home / '.gitconfig').exists())
 
     def test_generator_uses_checkout_and_literal_description(self):
         description = 'pipes | ampersands & quotes " and backslash \\'
@@ -165,16 +395,6 @@ class Scripts(unittest.TestCase):
         self.assertIn('A "quote"', (self.home / 'notification-args').read_text())
         self.assertNotIn('A "quote"', (self.home / 'notification-source').read_text())
         self.assertIn('item 1 of argv', (self.home / 'notification-source').read_text())
-
-    def test_install_creates_identity_and_ssh_directory(self):
-        self.prepare_install()
-        (self.home / '.gitconfig.local').unlink()
-        shutil.rmtree(self.home / '.ssh')
-        result = self.run_script('install.sh', input='Test User\ntest@example.invalid\n')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Test User', (self.home / '.gitconfig.local').read_text())
-        self.assertTrue((self.home / '.ssh/config').is_symlink())
-        self.assertEqual((self.home / '.gitconfig.local').stat().st_mode & 0o777, 0o600)
 
     def test_version_and_unknown_option_do_not_install(self):
         self.assertEqual(self.run_script('install.sh', '--version').returncode, 0)

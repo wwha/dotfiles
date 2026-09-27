@@ -1,11 +1,8 @@
 # This is a template gitconfig. Personal information should be added in ~/.gitconfig.local
-[include]
-    path = ~/.gitconfig.local
-
 [core]
 	editor = vim
 	quotepath = false
-	excludesfile = ~/git-template/gitignore
+	excludesfile = ~/.git-template/gitignore
 	ignorecase = false
 [diff]
 	ignoresubmodules=dirty
@@ -41,3 +38,7 @@
 	autoStash = true
 [help]
 	autocorrect = 1
+
+# Local settings take precedence over shared defaults.
+[include]
+    path = ~/.gitconfig.local

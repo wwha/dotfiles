@@ -51,30 +51,16 @@ _Real-time linting and fixing._
 - **Commands:**
   - `:ALEInfo`: See active linters and their status.
 - **Supported Linters/Fixers:**
-  - **Python:** `flake8` (lint, max-line-length=88), `black` (fix)
+  - **Python:** `ruff` (lint and fix), `ruff_format` (format)
   - **C/C++:** `clangd` (lint/LSP), `clang-format` (fix)
-  - **Shell:** `shellcheck` (lint)
-  - **JavaScript:** `eslint` (lint)
   - **Markdown:** `markdownlint` (lint, MD013 disabled), `prettier` (fix)
-
----
-
-## 🤖 Codeium (AI Autocomplete)
-
-_Free AI coding assistant._
-
-- **Accept Suggestion:** `Ctrl + g`
-- **Next Suggestion:** `Ctrl + ;`
-- **Previous Suggestion:** `Ctrl + ,`
-- **Clear Suggestion:** `Ctrl + x`
-- **Status:** Shown in the status line.
 
 ---
 
 ## ⌨️ General Mappings (Leader = `,`)
 
 - `,w`: Save file.
-- `,bd`: Close current buffer (safe).
+- `,bd`: Close current buffer (legacy mapping may discard unsaved changes).
 - `,ba`: Close all buffers.
 - `,ss`: Toggle spell checking.
 - `,pp`: Toggle paste mode.
