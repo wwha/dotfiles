@@ -90,8 +90,9 @@ contents behind symlinks.
 
 ## Security checks
 
-Gitleaks scans staged changes before commits and scans the full Git history in
-GitHub Actions. Enable GitHub push protection for the repository as an additional
+Git hooks are deferred until device migration is complete. Shared configuration
+leaves repository hooks under each repository's control. Gitleaks scans the full
+Git history in GitHub Actions; GitHub push protection is enabled as an additional
 credential check. These tools do not replace manual review for internal hostnames,
 addresses, paths or identity information. If a real credential appears in Git,
 revoke or rotate it first, then clean the history.

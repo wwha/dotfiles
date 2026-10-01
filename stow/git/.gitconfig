@@ -3,7 +3,6 @@
 	editor = vim
 	quotepath = false
 	excludesfile = ~/.git-template/gitignore
-	hooksPath = ~/.git-hooks
 [diff]
 	ignoresubmodules=dirty
 	tool = vimdiff
