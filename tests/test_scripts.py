@@ -262,6 +262,9 @@ sys.exit(1 if conflict else 0)
         self.stub('pre-commit', 'printf "%s\\n" "$*" >> "$HOME/hook-args"')
         result = self.run_script('install.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
+        local_hook = self.home / '.git-template/hooks/pre-commit.local'
+        local_hook.write_text('#!/bin/sh\nexit 17\n')
+        local_hook.chmod(0o644)
         self.git('init', '--template=' + str(self.home / '.git-template'))
         result = subprocess.run(
             ['/usr/bin/git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
@@ -270,6 +273,14 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.home / 'hook-args').read_text().splitlines(),
                          ['git --pre-commit --staged --redact', 'run --hook-stage pre-commit'])
+        copied_local_hook = self.repo / '.git/hooks/pre-commit.local'
+        self.assertFalse(copied_local_hook.stat().st_mode & 0o111)
+        copied_local_hook.chmod(0o755)
+        result = subprocess.run(
+            ['/usr/bin/git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+             'commit', '--allow-empty', '-m', 'disabled local hook stays skipped'],
+            cwd=self.repo, env=self.env, text=True, capture_output=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
         (self.repo / 'block-secret').write_text('fixture')
         self.git('add', 'block-secret')
         result = subprocess.run(
