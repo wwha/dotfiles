@@ -9,7 +9,7 @@ esac
 while IFS= read -r -d '' file; do
     [[ -f "$file" ]] || continue
     case "$file" in
-        *.sh|*.zsh|stow/zsh/.zshrc|stow/git/.git-hooks/*) zsh -f -n "$file" ;;
+        *.sh|*.zsh|stow/zsh/.zshrc|stow/git/.git-template/hooks/*) zsh -f -n "$file" ;;
     esac
 done < <(git ls-files -z --cached --others --exclude-standard)
 git config --file stow/git/.gitconfig --no-includes --list >/dev/null

@@ -85,12 +85,25 @@ contents behind symlinks.
 
 ## Security checks
 
-Git hooks are deferred until device migration is complete. Shared configuration
-leaves repository hooks under each repository's control. Gitleaks scans the full
-Git history in GitHub Actions; GitHub push protection is enabled as an additional
-credential check. These tools do not replace manual review for internal hostnames,
-addresses, paths or identity information. If a real credential appears in Git,
-revoke or rotate it first, then clean the history.
+`install.sh` installs a Git template hook for newly initialized and cloned
+repositories. It scans staged changes with Gitleaks, then runs repository-owned
+checks when `.pre-commit-config.yaml` is present. The hook runs Gitleaks even
+when the repository configuration does not list it. `install.sh deps` installs
+both tools; if either is missing, the hook allows the commit and prints its
+Homebrew installation command. A detected secret or failed repository check
+blocks the commit.
+
+Existing repositories are unchanged. During installation, an existing private
+`~/.git-template/hooks/pre-commit` is preserved as `pre-commit.local` and runs
+after the shared checks. Do not run `pre-commit install` in a repository using
+this template: it would replace the shared hook. Add repository-specific checks
+to `.pre-commit-config.yaml` instead.
+
+Gitleaks scans the fetched reachable Git history in GitHub Actions. GitHub Push
+Protection should remain enabled as the final credential check before a push.
+These tools do not replace manual review for internal hostnames, addresses,
+paths or identity information. If a real credential appears in Git, revoke or
+rotate it first, then clean the history.
 
 ## Verification and contribution
 

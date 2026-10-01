@@ -118,7 +118,9 @@ sys.exit(1 if conflict else 0)
         self.assertTrue((self.home / '.gitconfig').is_symlink())
         self.assertFalse((self.home / '.ssh').exists())
         self.assertFalse((self.home / '.local/bin').exists())
-        self.assertFalse((self.home / '.git-template/hooks').exists())
+        hook = self.home / '.git-template/hooks/pre-commit'
+        self.assertTrue(hook.is_symlink())
+        self.assertEqual(hook.resolve(), self.repo / 'stow/git/.git-template/hooks/pre-commit')
         self.assertFalse((self.home / '.vim').exists())
         self.assertFalse((self.home / '.gitconfig.local').exists())
 
@@ -147,7 +149,9 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         saved_ignore = next((self.home / '.dotfiles_backups').glob('*/.git-template/gitignore'))
         self.assertEqual(saved_ignore.read_text(), 'private ignore')
-        self.assertEqual((template / 'hooks/pre-commit').read_text(), 'private hook')
+        self.assertEqual((template / 'hooks/pre-commit.local').read_text(), 'private hook')
+        self.assertEqual((template / 'hooks/pre-commit').resolve(),
+                         self.repo / 'stow/git/.git-template/hooks/pre-commit')
         self.assertEqual((template / 'commit-template').resolve(),
                          self.repo / 'stow/git/.git-template/commit-template')
 
@@ -252,6 +256,27 @@ sys.exit(1 if conflict else 0)
             cwd=self.repo, env=self.env, text=True, capture_output=True, timeout=20)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.home / '.git-hooks').exists())
+
+    def test_template_pre_commit_scans_then_runs_repository_checks(self):
+        self.stub('gitleaks', 'printf "%s\\n" "$*" >> "$HOME/hook-args"\nif [ -e "$PWD/block-secret" ]; then exit 1; fi')
+        self.stub('pre-commit', 'printf "%s\\n" "$*" >> "$HOME/hook-args"')
+        result = self.run_script('install.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.git('init', '--template=' + str(self.home / '.git-template'))
+        result = subprocess.run(
+            ['/usr/bin/git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+             'commit', '--allow-empty', '-m', 'fixture'],
+            cwd=self.repo, env=self.env, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / 'hook-args').read_text().splitlines(),
+                         ['git --pre-commit --staged --redact', 'run --hook-stage pre-commit'])
+        (self.repo / 'block-secret').write_text('fixture')
+        self.git('add', 'block-secret')
+        result = subprocess.run(
+            ['/usr/bin/git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+             'commit', '-m', 'blocked'],
+            cwd=self.repo, env=self.env, text=True, capture_output=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
 
     def test_repository_ignore_protects_secrets_without_hiding_project_files(self):
         self.git('init')

@@ -1,0 +1,20 @@
+#!/bin/zsh
+# Personal secret baseline, followed by repository-owned checks.
+
+if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks git --pre-commit --staged --redact || exit $?
+else
+    print -u2 'Gitleaks is not installed; secret scanning was skipped. Install: brew install gitleaks'
+fi
+
+if [[ -f .pre-commit-config.yaml ]]; then
+    if command -v pre-commit >/dev/null 2>&1; then
+        pre-commit run --hook-stage pre-commit || exit $?
+    else
+        print -u2 'pre-commit is not installed; repository checks were skipped. Install: brew install pre-commit'
+    fi
+fi
+
+if [[ -e "$(dirname "$0")/pre-commit.local" ]]; then
+    "$(dirname "$0")/pre-commit.local" || exit $?
+fi

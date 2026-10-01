@@ -1,6 +1,7 @@
 # Explicit dependency list; no applications or machine inventory.
 brew "git"
 brew "gitleaks"
+brew "pre-commit"
 brew "vim"
 brew "tmux"
 brew "zsh-autosuggestions"
