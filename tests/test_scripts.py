@@ -283,23 +283,16 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(ignored, '.DS_Store')
         self.assertEqual(self.git('config', '--path', '--get', 'core.excludesfile').stdout.strip(),
                          str(self.home / '.git-template/gitignore'))
-
-    def test_global_pre_commit_hook_scans_staged_changes(self):
-        self.stub('gitleaks', 'printf "%s\\n" "$*" > "$HOME/gitleaks-args"; exit 0')
-        repo = self.base / 'hook-repo'
-        repo.mkdir()
-        subprocess.run(['/usr/bin/git', 'init', str(repo)], check=True,
-                       env=self.env, capture_output=True, text=True)
-        hook_dir = repo / '.git/hooks'
-        (hook_dir / 'pre-commit').write_text('#!/bin/sh\ntouch "$HOME/local-hook-ran"\n')
-        (hook_dir / 'pre-commit').chmod(0o755)
-        result = subprocess.run(['/bin/sh', str(self.repo / 'stow/git/.git-hooks/pre-commit')],
-                                env=self.env, cwd=repo, text=True,
-                                capture_output=True, timeout=20)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.home / 'gitleaks-args').read_text().strip(),
-                         'git --pre-commit --redact --staged')
-        self.assertTrue((self.home / 'local-hook-ran').exists())
+        hook = self.repo / '.git/hooks/commit-msg'
+        hook.parent.mkdir(exist_ok=True)
+        hook.write_text('#!/bin/sh\nexit 23\n')
+        hook.chmod(0o755)
+        result = subprocess.run(
+            ['/usr/bin/git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+             'commit', '--allow-empty', '-m', 'fixture'],
+            cwd=self.repo, env=self.env, text=True, capture_output=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / '.git-hooks').exists())
 
     def test_repository_ignore_protects_secrets_without_hiding_project_files(self):
         self.git('init')
@@ -432,21 +425,6 @@ sys.exit(1 if conflict else 0)
         result = self.run_script('scripts/set-wifi-dns.sh', 'manual')
         self.assertNotEqual(result.returncode, 0)
 
-    def test_pre_commit_skips_shellcheck_but_checks_zsh_syntax(self):
-        self.git('init', '--template=')
-        self.stub('shellcheck', 'touch "$HOME/shellcheck-called"; exit 91')
-        (self.repo / 'example.sh').write_text('#!/bin/sh\necho "$value"\n')
-        self.git('add', 'example.sh')
-        result = self.run_script('git/git-template/hooks/pre-commit')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse((self.home / 'shellcheck-called').exists())
-        (self.repo / 'broken.zsh').write_text('#!/bin/zsh\nif then\n')
-        self.git('add', 'broken.zsh')
-        result = self.run_script('git/git-template/hooks/pre-commit')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Zsh syntax error', result.stdout)
-        self.assertFalse((self.home / 'shellcheck-called').exists())
-
     def test_tmux_ignores_local_override_and_limits_clipboard_access(self):
         tmux = shutil.which('tmux')
         if not tmux:
@@ -553,37 +531,6 @@ sys.exit(1 if conflict else 0)
     def git(self, *args):
         return subprocess.run(['/usr/bin/git', *args], cwd=self.repo, env=self.env,
                               check=True, text=True, capture_output=True)
-
-    def test_prepare_message_preserves_text_and_comments(self):
-        self.git('init')
-        self.git('checkout', '-b', 'feature-42-example')
-        message = self.base / 'message'
-        message.write_text('Useful title\n\nDetails\n# comment\n')
-        result = self.run_script('git/git-template/hooks/prepare-commit-msg', str(message))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Useful title', message.read_text())
-        self.assertIn('Details', message.read_text())
-        self.assertIn('# comment', message.read_text())
-        self.assertIn('[feature-42-example]', message.read_text())
-
-    def test_pre_commit_handles_spaced_and_newline_names(self):
-        self.git('init')
-        for name in ('file with spaces.txt', 'line\nbreak.txt'):
-            (self.repo / name).write_text('trailing   \n')
-        self.git('add', '.')
-        result = self.run_script('git/git-template/hooks/pre-commit')
-        self.assertNotEqual(result.returncode, 0)
-        for name in ('file with spaces.txt', 'line\nbreak.txt'):
-            self.assertEqual((self.repo / name).read_text(), 'trailing\n')
-
-    def test_notification_passes_message_as_data(self):
-        self.stub('git', "printf '%s\\n' 'A \"quote\" and backslash \\\\'")
-        self.stub('osascript', 'printf "%s\\n" "$@" > "$HOME/notification-args"; cat > "$HOME/notification-source"')
-        result = self.run_script('git/git-template/hooks/post-commit')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('A "quote"', (self.home / 'notification-args').read_text())
-        self.assertNotIn('A "quote"', (self.home / 'notification-source').read_text())
-        self.assertIn('item 1 of argv', (self.home / 'notification-source').read_text())
 
     def test_version_and_unknown_option_do_not_install(self):
         self.assertEqual(self.run_script('install.sh', '--version').returncode, 0)

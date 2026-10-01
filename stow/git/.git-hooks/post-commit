@@ -1,6 +1,0 @@
-#!/bin/sh
-git_dir=$(git rev-parse --git-common-dir) || exit $?
-local_hook="$git_dir/hooks/post-commit"
-if [ -x "$local_hook" ]; then
-    exec "$local_hook" "$@"
-fi
