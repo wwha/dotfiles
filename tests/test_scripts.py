@@ -59,8 +59,12 @@ class Scripts(unittest.TestCase):
         (self.home / '.vimrc').write_text('old vim')
         (self.home / '.tmux.conf').symlink_to(self.home / 'missing')
         before = (self.repo / 'zsh/zshrc').read_bytes()
+        result = self.run_script('install.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Conflicts found', result.stderr)
+        self.assertFalse((self.home / '.gitconfig').exists())
         for _ in range(2):
-            result = self.run_script('install.sh')
+            result = self.run_script('install.sh', '--backup')
             self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.home / '.gitconfig.local').read_text(), 'existing identity')
         self.assertEqual((self.home / '.ssh/config.local').read_text(), 'existing hosts')
@@ -81,7 +85,7 @@ class Scripts(unittest.TestCase):
         result = self.run_script('install.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.home / '.gitconfig').is_symlink())
-        self.assertTrue((self.home / '.ssh/config').is_symlink())
+        self.assertFalse((self.home / '.ssh').exists())
         self.assertFalse((self.home / '.local/bin').exists())
         self.assertFalse((self.home / '.git-template/hooks').exists())
         self.assertFalse((self.home / '.vim').exists())
@@ -110,6 +114,11 @@ class Scripts(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.home.iterdir()), before)
         self.assertEqual((self.home / '.vimrc').read_text(), 'original')
         self.assertEqual(os.readlink(self.home / '.tmux.conf'), 'missing')
+        result = self.run_script('install.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / '.zshrc').exists())
+        result = self.run_script('install.sh', '--backup')
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_install_backs_up_links_and_directories_without_following(self):
         (self.home / '.vimrc').symlink_to('missing')
@@ -118,7 +127,7 @@ class Scripts(unittest.TestCase):
         target = self.base / 'external'
         target.write_text('external')
         (self.home / '.zshrc').symlink_to(target)
-        result = self.run_script('install.sh')
+        result = self.run_script('install.sh', '--backup')
         self.assertEqual(result.returncode, 0, result.stderr)
         backups = self.home / '.dotfiles_backups'
         saved_link = next(p / '.vimrc' for p in backups.iterdir() if (p / '.vimrc').is_symlink())
@@ -168,6 +177,32 @@ class Scripts(unittest.TestCase):
         result = self.run_script(str(self.home / '.local/bin/new-script'), 'migration-probe')
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_install_ssh_is_opt_in_and_refuses_symlinked_parent(self):
+        (self.home / '.ssh').mkdir()
+        (self.home / '.ssh/config').write_text('private ssh config')
+        result = self.run_script('install.sh', '--ssh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.home / '.ssh/config').read_text(), 'private ssh config')
+        self.assertFalse((self.home / '.zshrc').exists())
+        (self.home / '.ssh/config').unlink()
+        (self.home / '.ssh').rmdir()
+        target = self.base / 'ssh-target'
+        target.mkdir()
+        (self.home / '.ssh').symlink_to(target, target_is_directory=True)
+        result = self.run_script('install.sh', '--ssh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / '.gitconfig').exists())
+
+    def test_install_rejects_insecure_backup_directory_before_linking(self):
+        backup_root = self.home / '.dotfiles_backups'
+        backup_root.mkdir(mode=0o755)
+        backup_root.chmod(0o755)
+        (self.home / '.vimrc').write_text('original')
+        result = self.run_script('install.sh', '--backup')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / '.gitconfig').exists())
+        self.assertEqual((self.home / '.vimrc').read_text(), 'original')
+
     def test_dependency_failure_does_not_link_configuration(self):
         result = self.run_script('install-deps.sh')
         self.assertNotEqual(result.returncode, 0)
@@ -185,6 +220,19 @@ class Scripts(unittest.TestCase):
         self.assertEqual(self.git('config', '--path', '--get', 'core.excludesfile').stdout.strip(),
                          str(self.home / '.git-template/gitignore'))
 
+    def test_repository_ignore_protects_secrets_without_hiding_project_files(self):
+        self.git('init')
+        for name in ('.api_keys', '.env.production', 'id_ed25519', 'private.pem'):
+            (self.repo / name).write_text('secret')
+            self.assertTrue(self.git('check-ignore', '--no-index', name).stdout.strip(), name)
+        for name in ('.env.example', 'schema.sql', 'vendor/library.c'):
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('example or project file')
+            result = subprocess.run(['/usr/bin/git', 'check-ignore', '--no-index', name],
+                                    cwd=self.repo, env=self.env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 1, name)
+
     def test_vim_without_plugins_loads_local_override(self):
         (self.home / '.vimrc.local').write_text('set tabstop=7\n')
         script = self.base / 'probe.vim'
@@ -196,6 +244,51 @@ class Scripts(unittest.TestCase):
                                 env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output.read_text(), '7\n[]\n[]\n')
+
+    def test_vim_preserves_recovery_and_disables_automatic_edits_by_default(self):
+        output = self.base / 'vim-options'
+        script = self.base / 'probe.vim'
+        script.write_text("call writefile([string(&swapfile), string(&backup), string(g:ale_fix_on_save), string(exists('#osc52#TextYankPost')), string(exists('#file_templates#BufNewFile'))], '" + str(output) + "')\nqa!\n")
+        result = subprocess.run(['/usr/bin/vim', '-N', '-u', str(self.repo / 'vim/vimrc'),
+                                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = output.read_text().splitlines()
+        self.assertEqual(values[:3], ['1', '0', '0'])
+        self.assertEqual(values[3:], ['1', '0'])
+
+    def test_vim_local_override_can_opt_in_to_templates_and_whitespace_cleanup(self):
+        (self.home / '.vimrc.local').write_text(
+            'let g:dotfiles_enable_file_templates = 1\n'
+            'let g:dotfiles_trim_whitespace_on_save = 1\n')
+        target = self.base / 'created.py'
+        output = self.base / 'vim-opt-in'
+        script = self.base / 'probe.vim'
+        script.write_text("execute 'edit ' . fnameescape('" + str(target) + "')\n"
+                          "call setline(1, 'line  ')\nwrite\n"
+                          "call writefile([getline(1), string(line('$')), string(g:dotfiles_enable_file_templates)], '" + str(output) + "')\nqa!\n")
+        result = subprocess.run(['/usr/bin/vim', '-N', '-u', str(self.repo / 'vim/vimrc'),
+                                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = output.read_text().splitlines()
+        self.assertEqual(values[0], 'line')
+        self.assertGreater(int(values[1]), 1)
+
+    def test_vim_buffer_close_does_not_discard_modified_content(self):
+        target = self.base / 'unsaved.txt'
+        target.write_text('saved\n')
+        output = self.base / 'vim-buffer'
+        script = self.base / 'probe.vim'
+        script.write_text("execute 'edit ' . fnameescape('" + str(target) + "')\n"
+                          "let b = bufnr('%')\ncall setline(1, 'unsaved')\n"
+                          "try\nBclose\ncatch\nendtry\n"
+                          "call writefile([string(bufexists(b)), getbufline(b, 1)[0], string(getbufvar(b, '&modified'))], '" + str(output) + "')\nqa!\n")
+        result = subprocess.run(['/usr/bin/vim', '-N', '-u', str(self.repo / 'vim/vimrc'),
+                                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output.read_text().splitlines(), ['1', 'unsaved', '1'])
 
     def test_zsh_preserves_initializers_and_local_override(self):
         for name, body in {
@@ -215,7 +308,7 @@ class Scripts(unittest.TestCase):
                                  'probe', str(self.repo / 'zsh/zshrc')],
                                 env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), 'yes yes yes fixture local')
+        self.assertEqual(result.stdout.strip(), 'yes    local')
         self.assertEqual(result.stderr, '')
 
     def test_bun_is_opt_in_through_local_override(self):
@@ -239,6 +332,28 @@ class Scripts(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), str(self.home / '.bun') + '|yes|1')
 
+    def test_shared_zsh_does_not_start_tmux_or_load_personal_initializers(self):
+        env = dict(self.env, TERM_PROGRAM='Apple_Terminal', TMUX='', SSH_CONNECTION='')
+        self.stub('tmux', 'touch "$HOME/tmux-called"; exit 91')
+        result = subprocess.run(['/bin/zsh', '-f', '-c', 'source "$1"', 'probe', str(self.repo / 'zsh/zshrc')],
+                                env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.home / 'tmux-called').exists())
+
+    def test_network_script_requires_explicit_values_and_validates_before_sudo(self):
+        self.stub('sudo', 'printf "%s\\n" "$@" >> "$HOME/sudo-args"')
+        result = self.run_script('scripts/set-wifi-dns.sh', 'manual', 'Wi-Fi', '10.1.2.3',
+                                 '255.255.255.0', '10.1.2.1', '1.1.1.1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('10.1.2.3', (self.home / 'sudo-args').read_text())
+        (self.home / 'sudo-args').unlink()
+        result = self.run_script('scripts/set-wifi-dns.sh', 'manual', 'Wi-Fi', '999.1.2.3',
+                                 '255.255.255.0', '10.1.2.1', '1.1.1.1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / 'sudo-args').exists())
+        result = self.run_script('scripts/set-wifi-dns.sh', 'manual')
+        self.assertNotEqual(result.returncode, 0)
+
     def test_pre_commit_skips_shellcheck_but_checks_zsh_syntax(self):
         self.git('init', '--template=')
         self.stub('shellcheck', 'touch "$HOME/shellcheck-called"; exit 91')
@@ -254,7 +369,7 @@ class Scripts(unittest.TestCase):
         self.assertIn('Zsh syntax error', result.stdout)
         self.assertFalse((self.home / 'shellcheck-called').exists())
 
-    def test_tmux_loads_local_override_and_copies_with_pbcopy(self):
+    def test_tmux_loads_local_override_and_limits_clipboard_access(self):
         tmux = shutil.which('tmux')
         if not tmux:
             tmux = next((p for p in ('/opt/homebrew/bin/tmux', '/usr/local/bin/tmux')
@@ -271,6 +386,8 @@ class Scripts(unittest.TestCase):
                                   text=True, capture_output=True, timeout=10)
         self.addCleanup(lambda: tmux_run('kill-server'))
         started = tmux_run('-f', '/dev/null', 'new-session', '-d', '-s', 'test', '/bin/sleep 60')
+        if 'Operation not permitted' in started.stderr:
+            self.skipTest('sandbox does not permit Unix socket creation')
         self.assertEqual(started.returncode, 0, started.stderr)
         # tmux may report socket creation failure on stderr while exiting with 0.
         self.assertEqual(started.stderr, '', 'Isolated tmux server failed: ' + started.stderr)
@@ -281,6 +398,7 @@ class Scripts(unittest.TestCase):
         self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '3456')
         command = tmux_run('show-options', '-sv', 'copy-command').stdout.strip()
         self.assertTrue(command)
+        self.assertEqual(tmux_run('show-options', '-sv', 'set-clipboard').stdout.strip(), 'external')
         self.stub('pbcopy', 'cat > "$HOME/copied"')
         self.stub('xclip', 'touch "$HOME/unexpected-xclip"; exit 91')
         copied = subprocess.run(['/bin/sh', '-c', command], input='clipboard text',
@@ -289,27 +407,16 @@ class Scripts(unittest.TestCase):
         self.assertEqual((self.home / 'copied').read_text(), 'clipboard text')
         self.assertFalse((self.home / 'unexpected-xclip').exists())
 
-    def test_dependencies_are_explicit_repeatable_and_preserve_zshrc(self):
+    def test_dependencies_are_explicit_and_do_not_execute_remote_installers(self):
         (self.home / '.zshrc').write_text('keep shell config')
         self.stub('brew', 'printf "%s\\n" "$@" >> "$HOME/brew-args"')
-        self.stub('curl', '''
-            echo curl >> "$HOME/downloads"
-            case "$*" in
-                *plug.vim*) mkdir -p "$HOME/.vim/autoload"; touch "$HOME/.vim/autoload/plug.vim" ;;
-                *ohmyzsh*) printf '%s\\n' '[ "$KEEP_ZSHRC" = yes ] && [ "$RUNZSH" = no ] && [ "$CHSH" = no ] || exit 92' 'mkdir -p "$HOME/.oh-my-zsh"' ;;
-                *) exit 93 ;;
-            esac
-        ''')
-        self.stub('git', '''
-            [ "$1" = clone ] || exit 94
-            echo clone >> "$HOME/downloads"
-            mkdir -p "$3"
-        ''')
-        for _ in range(2):
-            result = self.run_script('install-deps.sh')
-            self.assertEqual(result.returncode, 0, result.stderr)
+        self.stub('curl', 'touch "$HOME/remote-installer-called"; exit 91')
+        self.stub('git', 'touch "$HOME/remote-clone-called"; exit 91')
+        result = self.run_script('install-deps.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.home / '.zshrc').read_text(), 'keep shell config')
-        self.assertEqual((self.home / 'downloads').read_text().splitlines(), ['curl', 'curl', 'clone', 'clone'])
+        self.assertFalse((self.home / 'remote-installer-called').exists())
+        self.assertFalse((self.home / 'remote-clone-called').exists())
         self.assertIn('--file=' + str(self.repo / 'Brewfile'), (self.home / 'brew-args').read_text())
         self.assertFalse((self.home / '.gitconfig').exists())
 

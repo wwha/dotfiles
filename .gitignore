@@ -22,6 +22,21 @@
 *.local
 local.*
 
+# Secrets and local credentials
+.api_keys
+.env
+.env.*
+!.env.example
+!.env.template
+id_rsa
+id_ed25519
+id_ecdsa
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
 # Log files
 *.log
 

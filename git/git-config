@@ -3,7 +3,6 @@
 	editor = vim
 	quotepath = false
 	excludesfile = ~/.git-template/gitignore
-	ignorecase = false
 [diff]
 	ignoresubmodules=dirty
 	tool = vimdiff
@@ -36,9 +35,6 @@
 	autoSetupRemote = true
 [rebase]
 	autoStash = true
-[help]
-	autocorrect = 1
-
 # Local settings take precedence over shared defaults.
 [include]
     path = ~/.gitconfig.local

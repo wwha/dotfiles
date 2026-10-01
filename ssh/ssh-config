@@ -6,8 +6,3 @@ PubkeyAuthentication yes
 Host *
   AddKeysToAgent yes
   UseKeychain yes
-
-Host github.com
-    Hostname ssh.github.com
-    Port 443
-    User git

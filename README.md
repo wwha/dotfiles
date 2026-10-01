@@ -16,15 +16,13 @@ Clone into a permanent location. Review the scripts before running them:
 git clone git@github.com:wwha/dotfiles.git
 cd dotfiles
 ./install.sh --dry-run  # Preview links and conflicts; writes nothing
-./install.sh            # Offline links only; no identity prompts or downloads
+./install.sh            # Offline; stops if any target would be displaced
 ```
 
-Correct links are left alone. Other destination files, directories and symlinks
-(including broken links) are moved into unique private directories under
-`~/.dotfiles_backups`; each saved path is printed. Installation stops on failure
-but is not transactional: links created earlier in the run remain installed.
-Existing local files, their permissions and legacy command links are unchanged.
-Repository-local SSH overrides are no longer linked over HOME's SSH overrides.
+Correct links are left alone. Conflicts stop the entire link operation before any
+changes. To explicitly displace conflicts into a private backup directory, review
+the preview and pass `--backup`. SSH configuration is opt-in with `--ssh`; review
+`ssh/ssh-config` before linking it. The installer never overwrites `*.local` files.
 
 Fresh installations create `~/.git-template` with only an ignore file and commit
 message template. Existing template links, files and hooks are preserved; missing
@@ -40,13 +38,12 @@ instructions. Then, explicitly run:
 ./install-deps.sh
 ```
 
-This runs `brew bundle --file=Brewfile`, installs vim-plug and Oh My Zsh plus two
-Zsh plugins when absent. It preserves an existing `.zshrc`, does not change the
-login shell, and does not link the shared configuration. Homebrew may install or
-upgrade the listed packages; it is not a package lock or a whole-machine restore.
-Existing plugin installations are not updated. A failed download stops setup;
-review any partial download before retrying. Run `:PlugInstall` in Vim to install
-its plugins. Basic Vim settings also load when vim-plug is absent.
+This runs `brew bundle --file=Brewfile`. It preserves an existing `.zshrc`, does
+not change the login shell, and does not link configuration. Homebrew may install
+or upgrade listed packages; the Brewfile is not a version lock or whole-machine
+restore. It does not execute remote shell installers or clone floating branches.
+Vim plugins remain an explicit action inside Vim: review the `Plug` declarations,
+then run `:PlugInstall`. Basic Vim settings load without vim-plug.
 
 LLVM is keg-only. If Vim needs its `clangd` and `clang-format`, add the following
 to `~/.zshrc.local` after dependency setup:
@@ -56,7 +53,7 @@ export PATH="$(brew --prefix llvm)/bin:$PATH"
 ```
 
 ESLint remains a project-provided dependency. Conda, NVM, Rime and Tailscale
-are optional existing tools, not installed by this repository.
+are machine-specific and are not initialized by the shared shell config.
 
 ## Local configuration
 
@@ -69,16 +66,35 @@ These files stay outside Git and are never overwritten by the installer:
 | `~/.zshrc.local` | Shell overrides, loaded after existing initialization |
 | `~/.vimrc.local` | Vim overrides, loaded last |
 | `~/.tmux.conf.local` | tmux overrides, loaded last |
-| `~/.api_keys` | Existing private shell secrets entry point; retained |
+| `~/.api_keys` | Private secrets file; source it from `~/.zshrc.local` if needed |
 
 For a fresh Git identity, use `git config --file ~/.gitconfig.local user.name`
 and `git config --file ~/.gitconfig.local user.email` with your values, then
 `chmod 600 ~/.gitconfig.local`. Local files need not exist until needed.
 
-The first compatibility phase retains existing Conda/NVM/API-key loading,
-Rime reminders, automatic tmux sessions, Vim file headers and formatting habits.
-Do not duplicate these initializers in local files before migrating them out of
-the shared configuration. See [Vim plugin usage](vim/PLUGINS.md).
+Machine-specific initialization, automatic tmux startup and the Rime prompt have
+been removed from shared startup. Move needed initialization into local files.
+Vim swap/recovery stays enabled; save-time formatting, new-file templates and
+OSC52 clipboard writes are opt-in through `~/.vimrc.local`. See
+[Vim plugin usage](vim/PLUGINS.md).
+
+Example local Zsh settings:
+
+```zsh
+# ~/.zshrc.local; enable only the tools installed on this Mac.
+export NVM_DIR="$HOME/.nvm"
+[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
+[[ -r "$HOME/.api_keys" ]] && source "$HOME/.api_keys"
+# Uncomment if you use Conda installed at this path:
+# eval "$($HOME/miniconda3/bin/conda shell.zsh hook)"
+```
+
+Manual Rime update, when needed: `source /path/to/dotfiles/zsh/rime-ice-update.zsh`
+then run `rime_ice_update`. The helper is no longer sourced automatically.
+
+`scripts/set-wifi-dns.sh` requires explicit network values. Review `--help` and
+provide the intended interface, IP, router and DNS addresses; it does not contain
+the original owner's network settings.
 
 Bun initialization is no longer part of shared configuration. Bun itself is not
 uninstalled, but a new terminal may no longer find `bun` or `bunx` if they are only
@@ -109,8 +125,8 @@ then overlays the selected snapshot. It preserves extra files and Git metadata,
 but does not back up HOME's identity or SSH files. Snapshots may include ignored
 private files; keep them private. Existing backups are never deleted by setup.
 
-The retained network script changes IP settings as well as DNS. The retained Git
-hooks may edit working files, alter commit messages and notify the desktop.
+The retained network script changes IP settings as well as DNS when explicitly
+invoked. The retained Git hooks may edit working files, alter commit messages and notify the desktop.
 Neither is run as part of installation or verification against the real HOME.
 Migration and per-file rollback steps are in [the guide](docs/migration.md).
 

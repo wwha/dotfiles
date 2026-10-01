@@ -12,19 +12,20 @@ checkout or edit these changes in the active repository as a way to preview them
 
 | Existing entry | Phase-one behavior / new entry | Migration and rollback |
 | --- | --- | --- |
-| `install.sh` | Offline, noninteractive; `--dry-run`; backs up conflicting links as well as files | Run only after reviewing a preview. Restore displaced objects from printed backup paths. |
-| Automatic package downloads | Explicit `install-deps.sh` and Brewfile | Review separately; Homebrew can upgrade packages. Link rollback does not undo package upgrades. |
+| `install.sh` | Offline; full conflict preflight; conflicts stop by default; explicit `--backup`; SSH link is opt-in via `--ssh` | Review `--dry-run` first. Restore displaced objects from printed private backup paths. |
+| Automatic package downloads | Explicit `install-deps.sh` and Brewfile; no fetched shell installer or floating Git clone | Homebrew can upgrade packages. Vim `:PlugInstall` executes declared third-party plugin code; review declarations before running. |
 | `~/.git-template` | Existing links/files/hooks preserved; missing defaults in a real directory are filled; fresh installs get no hooks | Preserve old checkout while its template link is in use. Disable hooks only as a separate migration. |
-| Global Git ignore | Fixes missing dot in path; broad rules are retained | Previously inactive rules may now hide untracked `*.sql`, `vendor/`, etc. Inspect affected projects with `git check-ignore -v path`; a local `core.excludesFile` can override this. Narrowing is phase two. |
+| Global Git ignore | Removes broad database/dependency exclusions; keeps OS/editor files | Previously ignored project artifacts may now appear untracked. Check worktree status and move project-specific patterns into each project. |
 | Git local include | Loaded last, so local values now win | Review duplicate settings; restore the previous config link to roll back. |
 | `new-script`, `script-template`, `set-wifi-dns` | Existing links and tracked sources retained; not installed for new users | Copy tools to private storage and repoint links before any later deletion. Network tool still changes IP and DNS. |
-| Conda/NVM/API keys | Initialization retained; Conda variable expansion fixed | Working Conda activation may now change PATH/environment. Check tools in a new terminal. Do not initialize them twice. |
+| Conda/NVM/API keys | Removed from shared startup; optional local initialization examples | Add only the paths and secrets file used on this Mac to `.zshrc.local`; check each initializer once. |
 | Bun/bunx | Shared completion, BUN_INSTALL and PATH initialization removed; programs remain installed | New terminals may not find commands installed only in ~/.bun/bin. Restore initialization via the optional local snippet in README. |
 | ShellCheck | Removed from Brewfile, Vim shell linters and the retained pre-commit hook | Existing linked hook sources change on activation; already copied project hooks and installed programs are untouched. Zsh syntax checks remain. |
-| `~/.zshrc.local`, `~/.vimrc.local`, `~/.tmux.conf.local` | New tail overrides | Existing files, if any, will now be sourced. Review their contents before activation; restore their saved versions for rollback. |
-| Rime and automatic tmux | Existing startup behavior retained | Moving Rime to a manual command is phase two. Shell local overrides load after this existing startup behavior. |
-| Vim | UTF-8 set before special characters; base config works without vim-plug; shell ALE linters disabled | Plugins, mappings, headers and auto-format remain. Start a separate Vim to validate; keep unsaved buffers in the old process. |
-| tmux | One clipboard command; OSC 52 plus pbcopy where available; no xclip fallback | Requires tmux 3.2+. Test a separate server before reloading a long-lived one; existing sessions are not reloaded automatically. |
+| `~/.zshrc.local`, `~/.vimrc.local`, `~/.tmux.conf.local` | Existing tail overrides remain | Review their contents before activation; restore saved versions for rollback. |
+| Rime and automatic tmux | No startup prompt or automatic tmux session; Rime update remains a manual function | Start tmux explicitly. Source the Rime helper and run `rime_ice_update` when wanted. |
+| Vim | Recovery defaults enabled; save-time fix/trim, file templates and OSC52 are opt-in; shell ALE linters disabled | Existing modified buffers are protected by normal `:bdelete` prompting. Review Vim plugin declarations before `:PlugInstall`. |
+| tmux | Clipboard is `external`: tmux copy commands may reach the terminal, applications inside tmux cannot set outer clipboard | Test a separate server before reloading a long-lived one; existing sessions are not reloaded automatically. |
+| Network script | Requires explicit interface and address values; original private network values removed | Review arguments carefully before running because it changes system network settings. |
 | `backup.sh` | Legacy snapshot/overlay recovery retained unchanged | Keep existing snapshots. Verify private/system backup before retiring this script in phase two. |
 
 ## Before any real-machine activation
@@ -81,8 +82,8 @@ killing existing sessions. Configuration rollback does not undo package upgrades
 The owner must confirm the real environment works and the following migrations
 are complete before old tracked files are deleted:
 
-- Move machine initializers into local files as the corresponding shared blocks
-  are removed, so each initializer runs once. Check Conda/NVM and secret loading. Bun is already opt-in through local configuration.
+- Move only needed machine initializers into local files. Check Conda/NVM and
+  secret loading. Bun remains opt-in through local configuration.
 - If retaining the old script generator, copy **both** generator and template into
   the same private scripts directory, plus the network script if needed. Repoint
   each command link and test help/generation without changing network settings.
@@ -90,9 +91,9 @@ are complete before old tracked files are deleted:
   and commit-template files but no default hooks. Existing project hooks are copies:
   inspect and disable only the intended hooks in each project, separately. Do not
   scan and delete hooks globally.
-- Move project-specific ignore rules to the relevant projects before narrowing the
-  global ignore. Change Rime updating to an explicit command and check that startup
-  no longer prompts. Confirm the replacement backup can restore private files.
+- Move project-specific ignore rules to the relevant projects. Confirm Rime
+  updates are explicit and startup no longer prompts. Confirm the replacement
+  backup can restore private files.
 - Record successful checks and rollback location in the second PR. Passing isolated
   tests or merging phase one alone is not migration confirmation.
 
