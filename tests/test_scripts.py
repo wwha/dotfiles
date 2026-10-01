@@ -190,7 +190,7 @@ sys.exit(1 if conflict else 0)
         saved_directory.rename(self.home / '.tmux.conf')
         self.assertEqual((self.home / '.tmux.conf/marker').read_text(), 'keep')
 
-    def test_existing_install_keeps_legacy_links_and_local_overrides(self):
+    def test_existing_install_keeps_legacy_links_and_private_files(self):
         # Reproduce the old installer's public layout, including its template symlink.
         for name, source in {'.zshrc': 'stow/zsh/.zshrc', '.vimrc': 'stow/vim/.vimrc',
                              '.tmux.conf': 'stow/tmux/.tmux.conf',
@@ -202,8 +202,7 @@ sys.exit(1 if conflict else 0)
         (self.home / '.local/bin').mkdir(parents=True)
         for name in ('new-script', 'script-template', 'set-wifi-dns'):
             (self.home / '.local/bin' / name).symlink_to(self.repo / f'scripts/{name}.sh')
-        locals = ('.gitconfig.local', '.ssh/config.local', '.zshrc.local',
-                  '.vimrc.local', '.tmux.conf.local', '.api_keys')
+        locals = ('.gitconfig.local', '.ssh/config.local', '.api_keys')
         for name in locals:
             (self.home / name).write_text('private ' + name)
             (self.home / name).chmod(0o600)
@@ -315,7 +314,7 @@ sys.exit(1 if conflict else 0)
                                     cwd=self.repo, env=self.env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 1, name)
 
-    def test_vim_without_plugins_loads_local_override(self):
+    def test_vim_without_plugins_does_not_load_local_override(self):
         (self.home / '.vimrc.local').write_text('set tabstop=7\n')
         script = self.base / 'probe.vim'
         output = self.base / 'vim-result'
@@ -325,7 +324,7 @@ sys.exit(1 if conflict else 0)
                                  '-i', 'NONE', '-n', '-es', '-S', str(script)],
                                 env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output.read_text(), '7\n[]\n[]\n')
+        self.assertEqual(output.read_text(), '4\n[]\n[]\n')
 
     def test_vim_preserves_recovery_and_disables_automatic_edits_by_default(self):
         output = self.base / 'vim-options'
@@ -338,24 +337,6 @@ sys.exit(1 if conflict else 0)
         values = output.read_text().splitlines()
         self.assertEqual(values[:3], ['1', '0', '0'])
         self.assertEqual(values[3:], ['1', '0'])
-
-    def test_vim_local_override_can_opt_in_to_templates_and_whitespace_cleanup(self):
-        (self.home / '.vimrc.local').write_text(
-            'let g:dotfiles_enable_file_templates = 1\n'
-            'let g:dotfiles_trim_whitespace_on_save = 1\n')
-        target = self.base / 'created.py'
-        output = self.base / 'vim-opt-in'
-        script = self.base / 'probe.vim'
-        script.write_text("execute 'edit ' . fnameescape('" + str(target) + "')\n"
-                          "call setline(1, 'line  ')\nwrite\n"
-                          "call writefile([getline(1), string(line('$')), string(g:dotfiles_enable_file_templates)], '" + str(output) + "')\nqa!\n")
-        result = subprocess.run(['/usr/bin/vim', '-N', '-u', str(self.repo / 'stow/vim/.vimrc'),
-                                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
-                                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        values = output.read_text().splitlines()
-        self.assertEqual(values[0], 'line')
-        self.assertGreater(int(values[1]), 1)
 
     def test_vim_buffer_close_does_not_discard_modified_content(self):
         target = self.base / 'unsaved.txt'
@@ -372,7 +353,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output.read_text().splitlines(), ['1', 'unsaved', '1'])
 
-    def test_zsh_preserves_initializers_and_local_override(self):
+    def test_zsh_preserves_initializers_without_local_override(self):
         for name, body in {
             '.oh-my-zsh/oh-my-zsh.sh': 'export OMZ_LOADED=yes',
             'miniconda3/bin/conda': '#!/bin/sh\nprintf "export CONDA_LOADED=yes\\n"',
@@ -390,7 +371,7 @@ sys.exit(1 if conflict else 0)
                                  'probe', str(self.repo / 'stow/zsh/.zshrc')],
                                 env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), 'yes yes yes  local')
+        self.assertEqual(result.stdout.strip(), 'yes yes yes  1')
         self.assertEqual(result.stderr, '')
 
     def test_shared_ssh_helpers_keep_preferences_and_reject_shell_metacharacters(self):
@@ -408,7 +389,7 @@ sys.exit(1 if conflict else 0)
             'host.example'])
         self.assertIn('unsupported characters', result.stderr)
 
-    def test_bun_is_opt_in_through_local_override(self):
+    def test_bun_is_not_loaded_from_local_override(self):
         (self.home / '.bun').mkdir()
         (self.home / '.bun/_bun').write_text('export BUN_LOADED=yes\n')
         env = dict(self.env, TERM_PROGRAM='test', TMUX='', SSH_CONNECTION='')
@@ -427,7 +408,7 @@ sys.exit(1 if conflict else 0)
             '[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"\n')
         result = load()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), str(self.home / '.bun') + '|yes|1')
+        self.assertEqual(result.stdout.strip(), 'absent|absent|0')
 
     def test_shared_zsh_starts_tmux_in_local_terminal_sessions(self):
         env = dict(self.env, TERM_PROGRAM='Apple_Terminal', TMUX='', SSH_CONNECTION='')
@@ -466,7 +447,7 @@ sys.exit(1 if conflict else 0)
         self.assertIn('Zsh syntax error', result.stdout)
         self.assertFalse((self.home / 'shellcheck-called').exists())
 
-    def test_tmux_loads_local_override_and_limits_clipboard_access(self):
+    def test_tmux_ignores_local_override_and_limits_clipboard_access(self):
         tmux = shutil.which('tmux')
         if not tmux:
             tmux = next((p for p in ('/opt/homebrew/bin/tmux', '/usr/local/bin/tmux')
@@ -492,7 +473,7 @@ sys.exit(1 if conflict else 0)
         result = tmux_run('source-file', str(self.repo / 'stow/tmux/.tmux.conf'))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, '')
-        self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '3456')
+        self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '1500')
         command = tmux_run('show-options', '-sv', 'copy-command').stdout.strip()
         self.assertTrue(command)
         self.assertEqual(tmux_run('show-options', '-sv', 'set-clipboard').stdout.strip(), 'external')

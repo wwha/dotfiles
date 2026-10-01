@@ -2,6 +2,10 @@
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
 # Apple Silicon Homebrew path
 [[ -d /opt/homebrew/bin ]] && export PATH="/opt/homebrew/bin:$PATH"
+# Homebrew LLVM is keg-only; expose its tools when installed.
+if [[ -d /opt/homebrew/opt/llvm/bin ]]; then
+    export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+fi
 # User scripts path
 export PATH="$HOME/.local/bin:${PATH}"
 # Path to your oh-my-zsh installation.
@@ -173,10 +177,6 @@ sshp() {
 
 if [[ -r "$HOME/.config/dotfiles/zsh/rime-ice-update.zsh" ]]; then
     source "$HOME/.config/dotfiles/zsh/rime-ice-update.zsh"
-fi
-
-if [[ -f "$HOME/.zshrc.local" ]]; then
-    source "$HOME/.zshrc.local"
 fi
 
 # zsh-syntax-highlighting must load after other ZLE/widget customizations.

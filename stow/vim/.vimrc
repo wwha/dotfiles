@@ -504,12 +504,3 @@ nmap <silent> <leader>af :ALEFix<cr>
 nnoremap <C-n> :NERDTreeToggle<CR>
 let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '\.o$', '\.obj$']
-
-" Set these in ~/.vimrc.local to opt into save-time edits or terminal clipboard access:
-" let g:dotfiles_trim_whitespace_on_save = 1
-" let g:dotfiles_enable_file_templates = 1
-" let g:dotfiles_osc52_yank = 1
-" Machine-specific settings override shared defaults.
-if filereadable(expand("~/.vimrc.local"))
-    source ~/.vimrc.local
-endif
