@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: dotfiles-static
+        name: Zsh syntax and Git configuration
+        entry: zsh tests/check.zsh --static
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

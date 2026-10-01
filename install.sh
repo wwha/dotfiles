@@ -98,6 +98,16 @@ is_correct_link() {
     [[ -L "$2" && "${2:A}" == "${1:A}" ]]
 }
 
+template_pre_commit="$HOME/.git-template/hooks/pre-commit"
+template_pre_commit_local="$HOME/.git-template/hooks/pre-commit.local"
+template_pre_commit_source="$BASEDIR/stow/git/.git-template/hooks/pre-commit"
+if [[ -e "$template_pre_commit" || -L "$template_pre_commit" ]] && \
+        ! is_correct_link "$template_pre_commit_source" "$template_pre_commit" && \
+        { [[ -e "$template_pre_commit_local" ]] || [[ -L "$template_pre_commit_local" ]]; }; then
+    print -u2 'Cannot preserve ~/.git-template/hooks/pre-commit because pre-commit.local already exists.'
+    exit 1
+fi
+
 for package in "${packages[@]}"; do
     package_dir="$BASEDIR/stow/$package"
     [[ -d "$package_dir" ]] || { print -u2 "Missing Stow package: $package_dir"; exit 1; }
@@ -172,6 +182,12 @@ if (( backup && ${#conflicts} )); then
     (umask 077; mkdir -p "$HOME/.dotfiles_backups")
     backup_dir=$(mktemp -d "$HOME/.dotfiles_backups/$(date +%Y%m%d_%H%M%S).XXXXXX")
     for dest in "${conflicts[@]}"; do
+        if [[ "$dest" == "$template_pre_commit" ]] && ! is_correct_link "$template_pre_commit_source" "$dest"; then
+            mkdir -p "${template_pre_commit_local:h}"
+            mv "$dest" "$template_pre_commit_local"
+            print -r -- "Preserved private hook: $template_pre_commit_local"
+            continue
+        fi
         rel=${dest#"$HOME"/}
         mkdir -p "$backup_dir/${rel:h}"
         mv "$dest" "$backup_dir/$rel"
