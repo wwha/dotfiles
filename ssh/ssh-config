@@ -1,8 +1,1 @@
-Include ~/.ssh/config.local
-# Include ~/.orbstack/ssh/config
-# Enforce key-based authentication
-PubkeyAuthentication yes
-
-Host *
-  AddKeysToAgent yes
-  UseKeychain yes
+../stow/ssh/.ssh/config

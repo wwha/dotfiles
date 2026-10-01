@@ -12,8 +12,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: command -v tmux >/dev/null || brew install tmux
+      - run: brew install stow gitleaks tmux
+      - run: gitleaks git --redact --verbose --log-opts="--all"
       - run: zsh tests/check.zsh --all

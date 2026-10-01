@@ -1,8 +1,8 @@
 # Explicit dependency list; no applications or machine inventory.
 brew "git"
+brew "gitleaks"
 brew "vim"
 brew "tmux"
-brew "zsh"
 brew "zsh-autosuggestions"
 brew "zsh-syntax-highlighting"
 brew "ruff"
