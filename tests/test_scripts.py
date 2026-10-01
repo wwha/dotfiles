@@ -342,6 +342,7 @@ sys.exit(1 if conflict else 0)
         (self.home / '.vim/plugged').symlink_to(plugin_home / 'plugged')
         for ext, before, expected in (
                 ('py', 'import os\nx=  1\n', 'x = 1\n'),
+                ('py', 'while(True):\n    print("1")\n', 'while True:\n    print("1")\n'),
                 ('md', '# Title\n\ntext   \n\n\n\n', '# Title\n\ntext\n'),
                 ('md', '# Title\n\ntext   \nnext\n\n\n', '# Title\n\ntext  \nnext\n')):
             for action in ('write', 'call feedkeys(",af", "xt")'):
