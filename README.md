@@ -45,17 +45,16 @@ command links configuration; linking does not download software.
 
 The Brewfile contains command-line tools used by the shared configurations and
 their checks. It is a selected list, not a snapshot of the machine or a version
-lock. macOS's built-in Zsh is used. Homebrew LLVM is keg-only; to use its
-`clangd` and `clang-format`, add `export PATH="$(brew --prefix llvm)/bin:$PATH"`
-to a local shell override.
+lock. macOS's built-in Zsh is used. Homebrew LLVM is keg-only, so its commands
+are not linked into Homebrew's shared `bin` directory. The shared Zsh config
+adds LLVM's `bin` directory to `PATH` when LLVM is installed.
 Vim plugin details are in [the Vim guide](vim/PLUGINS.md).
 
 ## Shared and private settings
 
 Zsh loads the common Conda and NVM initializers when installed in their
-conventional locations, keeps the Tailscale command alias, loads the manual Rime
-update helper, then sources an optional `~/.zshrc.local`. Machine-specific values
-and secrets belong in that local file. Rime updates do not run at shell startup.
+conventional locations, keeps the Tailscale command alias, and loads the manual
+Rime update helper. Rime updates do not run at shell startup.
 
 Git identity is private and required. Set it in `~/.gitconfig.local`; shared Git
 configuration uses `user.useConfigOnly` so a commit fails until name and email are
@@ -68,9 +67,6 @@ Local files are optional and must not be copied into this repository:
 | --- | --- |
 | `~/.gitconfig.local` | Git identity and private Git settings |
 | `~/.ssh/config.local` | Private hosts and per-device SSH settings |
-| `~/.zshrc.local` | Machine-specific shell settings and secret loading |
-| `~/.vimrc.local` | Optional Vim overrides |
-| `~/.tmux.conf.local` | Optional tmux overrides |
 | `~/.api_keys` | Private secrets, if used by local shell configuration |
 
 The legacy `new-script` and `script-template` tools are no longer part of the
