@@ -477,15 +477,19 @@ let g:ale_pattern_options = {
 \   '\.env.*$': {'ale_enabled': 0},
 \}
 
-" Set this variable to 1 to fix files when you save them.
+" Fix Python and Markdown on save; other filetypes remain manual.
 let g:ale_fix_on_save = 0
+augroup ale_save_fix
+    autocmd!
+    autocmd FileType python,markdown let b:ale_fix_on_save = 1
+augroup END
 
 let g:ale_fixers = {
 \   '*': ['remove_trailing_lines', 'trim_whitespace'],
 \   'python': ['ruff', 'ruff_format'],
 \   'c': ['clang-format'],
 \   'cpp': ['clang-format'],
-\   'markdown': ['prettier', 'markdownlint'],
+\   'markdown': ['prettier', 'trim_whitespace', 'remove_trailing_lines'],
 \}
 
 " Linter specific options
