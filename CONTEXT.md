@@ -14,8 +14,6 @@ Shared configuration is maintained in this repository and installed on personal 
 
 **Conflict backup**: The original file, directory or symlink displaced by installation, retained for per-file rollback. A saved symlink does not include its target's contents.
 
-**Repository snapshot**: A legacy copy of working files, excluding Git metadata, retained for recovery. It is not a backup of private HOME configuration.
-
-**Restore**: Overlaying files from a repository snapshot after saving current files; Git metadata and files absent from the snapshot remain in place.
+**Restore**: Returning a displaced file, directory or symlink from its per-file installer backup.
 
 **Activation**: The point when a Mac starts reading a changed shared configuration, including changes reached through existing symlinks.

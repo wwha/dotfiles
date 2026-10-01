@@ -69,11 +69,8 @@ Local files are optional and must not be copied into this repository:
 | `~/.ssh/config.local` | Private hosts and per-device SSH settings |
 | `~/.api_keys` | Private secrets, if used by local shell configuration |
 
-The legacy `new-script` and `script-template` tools are no longer part of the
-default setup. During the first migration, existing links remain available until
-you complete the device migration. Move `set-wifi-dns` to `~/.local/bin/` if you
-still need it; it is device-specific and is not linked by Stow. Review its help
-and provide network values locally.
+The legacy `new-script`, `script-template` and `set-wifi-dns` tools have been
+removed. Set network preferences directly in macOS System Settings.
 
 ## Sync and recovery
 
@@ -82,9 +79,7 @@ changes, pull, then run `install.sh` after adding or removing package paths.
 There is no background synchronization. Resolve concurrent edits through Git.
 
 Git stores committed shared configuration only. Keep a separate private backup
-for local overrides, credentials, uncommitted work and other HOME data. The
-legacy `backup.sh` remains during the migration phase; it snapshots repository
-files, including ignored files, so its output must stay private. Installer
+for local overrides, credentials, uncommitted work and other HOME data. Installer
 conflict backups preserve displaced filesystem objects, but do not copy the
 contents behind symlinks.
 
