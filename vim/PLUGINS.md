@@ -53,7 +53,12 @@ _Real-time linting and fixing._
 - **Supported Linters/Fixers:**
   - **Python:** `ruff` (lint and fix), `ruff_format` (format)
   - **C/C++:** `clangd` (lint/LSP), `clang-format` (fix)
-  - **Markdown:** `markdownlint` (lint, MD013 disabled), `prettier` (fix)
+  - **Markdown:** `markdownlint` (lint, MD013 disabled), `prettier` and ALE whitespace fixers (fix)
+
+Python and Markdown fix automatically on save and manually with `,af`.
+Markdown fixing removes trailing whitespace (including two-space hard breaks)
+and extra trailing blank lines. Ruff fixes supported lint issues and formats
+valid Python; syntax errors still need manual correction.
 
 ---
 

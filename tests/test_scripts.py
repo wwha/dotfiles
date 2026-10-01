@@ -331,6 +331,35 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(values[:3], ['1', '0', '0'])
         self.assertEqual(values[3:], ['1', '0'])
 
+    def test_vim_python_and_markdown_fix_on_save_and_mapping(self):
+        plugin_home = Path(os.environ['HOME']) / '.vim'
+        if not (plugin_home / 'plugged/ale/plugin/ale.vim').is_file():
+            self.skipTest('ALE is not installed in the test host')
+        if not shutil.which('ruff') or not shutil.which('prettier'):
+            self.skipTest('Ruff and Prettier are required for fixer integration')
+        (self.home / '.vim').mkdir()
+        (self.home / '.vim/autoload').symlink_to(plugin_home / 'autoload')
+        (self.home / '.vim/plugged').symlink_to(plugin_home / 'plugged')
+        for ext, before, expected in (
+                ('py', 'import os\nx=  1\n', 'x = 1\n'),
+                ('md', '# Title\n\ntext   \n\n\n\n', '# Title\n\ntext\n')):
+            for action in ('write', 'call feedkeys(",af", "xt")'):
+                with self.subTest(filetype=ext, action=action):
+                    target = self.base / ('fix.' + ext)
+                    target.write_text(before)
+                    output = self.base / 'fixed'
+                    script = self.base / 'fix.vim'
+                    script.write_text('edit ' + str(target) + '\n' + action + '\nsleep 2\n'
+                                      'call writefile(getline(1,"$"),"' + str(output) + '")\nqa!\n')
+                    result = subprocess.run(
+                        ['/usr/bin/vim', '-N', '-u', str(self.repo / 'stow/vim/.vimrc'),
+                         '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                        env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=15)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(output.read_text(), expected)
+                    if action == 'write':
+                        self.assertEqual(target.read_text(), expected)
+
     def test_vim_buffer_close_does_not_discard_modified_content(self):
         target = self.base / 'unsaved.txt'
         target.write_text('saved\n')
