@@ -1,1 +1,0 @@
-../stow/zsh/.config/dotfiles/zsh/rime-ice-update.zsh

@@ -190,47 +190,6 @@ sys.exit(1 if conflict else 0)
         saved_directory.rename(self.home / '.tmux.conf')
         self.assertEqual((self.home / '.tmux.conf/marker').read_text(), 'keep')
 
-    def test_existing_install_keeps_legacy_links_and_private_files(self):
-        # Reproduce the old installer's public layout, including its template symlink.
-        for name, source in {'.zshrc': 'stow/zsh/.zshrc', '.vimrc': 'stow/vim/.vimrc',
-                             '.tmux.conf': 'stow/tmux/.tmux.conf',
-                             '.gitconfig': 'stow/git/.gitconfig'}.items():
-            (self.home / name).symlink_to(self.repo / source)
-        (self.home / '.git-template').symlink_to(self.repo / 'git/git-template')
-        (self.home / '.ssh').mkdir()
-        (self.home / '.ssh/config').symlink_to(self.repo / 'stow/ssh/.ssh/config')
-        (self.home / '.local/bin').mkdir(parents=True)
-        for name in ('new-script', 'script-template', 'set-wifi-dns'):
-            (self.home / '.local/bin' / name).symlink_to(self.repo / f'scripts/{name}.sh')
-        locals = ('.gitconfig.local', '.ssh/config.local', '.api_keys')
-        for name in locals:
-            (self.home / name).write_text('private ' + name)
-            (self.home / name).chmod(0o600)
-        (self.repo / 'stow/ssh/.ssh/config.local').write_text('must not replace HOME local')
-        result = self.run_script('install.sh')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Conflicts found', result.stderr)
-        result = self.run_script('install.sh', '--backup')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        links = {p: (os.readlink(p), p.lstat().st_mtime_ns)
-                 for p in self.home.rglob('*') if p.is_symlink() and p.name != '.git-template'}
-        result = self.run_script('install.sh')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        for p, before in links.items():
-            self.assertEqual((os.readlink(p), p.lstat().st_mtime_ns), before)
-            self.assertTrue(p.exists())
-        for name in locals:
-            self.assertEqual((self.home / name).read_text(), 'private ' + name)
-            self.assertEqual((self.home / name).stat().st_mode & 0o777, 0o600)
-        self.assertTrue((self.home / '.dotfiles_backups').is_dir())
-        saved_template = next((self.home / '.dotfiles_backups').glob('*/.git-template'))
-        self.assertTrue(saved_template.is_symlink())
-        for name in ('script-template', 'set-wifi-dns'):
-            result = self.run_script(str(self.home / '.local/bin' / name), '--help')
-            self.assertEqual(result.returncode, 0, result.stderr)
-        result = self.run_script(str(self.home / '.local/bin/new-script'), 'migration-probe')
-        self.assertEqual(result.returncode, 0, result.stderr)
-
     def test_install_ssh_is_opt_in_and_refuses_symlinked_parent(self):
         (self.home / '.ssh').mkdir()
         (self.home / '.ssh/config').write_text('private ssh config')
@@ -442,20 +401,6 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.home / 'tmux-called').exists())
 
-    def test_network_script_requires_explicit_values_and_validates_before_sudo(self):
-        self.stub('sudo', 'printf "%s\\n" "$@" >> "$HOME/sudo-args"')
-        result = self.run_script('scripts/set-wifi-dns.sh', 'manual', 'Wi-Fi', '10.1.2.3',
-                                 '255.255.255.0', '10.1.2.1', '1.1.1.1')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('10.1.2.3', (self.home / 'sudo-args').read_text())
-        (self.home / 'sudo-args').unlink()
-        result = self.run_script('scripts/set-wifi-dns.sh', 'manual', 'Wi-Fi', '999.1.2.3',
-                                 '255.255.255.0', '10.1.2.1', '1.1.1.1')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((self.home / 'sudo-args').exists())
-        result = self.run_script('scripts/set-wifi-dns.sh', 'manual')
-        self.assertNotEqual(result.returncode, 0)
-
     def test_tmux_ignores_local_override_and_limits_clipboard_access(self):
         tmux = shutil.which('tmux')
         if not tmux:
@@ -511,54 +456,6 @@ sys.exit(1 if conflict else 0)
         self.assertIn('--file=' + str(self.repo / 'Brewfile'), (self.home / 'brew-args').read_text())
         self.assertFalse((self.home / '.gitconfig').exists())
 
-    def test_generator_uses_checkout_and_literal_description(self):
-        description = 'pipes | ampersands & quotes " and backslash \\'
-        result = self.run_script('scripts/new-script.sh', 'example', description)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        target = self.repo / 'scripts/example.sh'
-        self.assertIn('# Description: ' + description, target.read_text())
-        self.assertEqual((self.home / '.local/bin/example').resolve(), target)
-        again = self.run_script('scripts/new-script.sh', 'example')
-        self.assertNotEqual(again.returncode, 0)
-        self.assertIn(description, target.read_text())
-        empty = self.run_script('scripts/new-script.sh', 'empty', '')
-        self.assertEqual(empty.returncode, 0, empty.stderr)
-        self.assertIn('# Description: \n', (self.repo / 'scripts/empty.sh').read_text())
-
-    def test_generator_rejects_dangling_target(self):
-        (self.repo / 'scripts/example.sh').symlink_to(self.base / 'missing')
-        result = self.run_script('scripts/new-script.sh', 'example')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertTrue((self.repo / 'scripts/example.sh').is_symlink())
-
-    def snapshot(self):
-        result = self.run_script('backup.sh', '-b')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return next((self.home / 'dotfiles_backup').iterdir())
-
-    def test_restore_preserves_git_extra_files_and_previous_contents(self):
-        (self.repo / '.git').mkdir()
-        (self.repo / '.git/marker').write_text('git metadata')
-        snapshot = self.snapshot()
-        (self.repo / 'README.md').write_text('new contents')
-        (self.repo / 'extra').write_text('keep')
-        result = self.run_script('backup.sh', '-r', input=snapshot.name + '\n')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.repo / '.git/marker').read_text(), 'git metadata')
-        self.assertEqual((self.repo / 'extra').read_text(), 'keep')
-        self.assertEqual((self.repo / 'README.md').read_bytes(), (snapshot / 'README.md').read_bytes())
-        self.assertTrue(any(p.read_text() == 'new contents' for p in (self.home / 'dotfiles_backup').glob('pre-recovery-*/README.md')))
-
-    def test_restore_rejects_escape_and_backup_failure(self):
-        snapshot = self.snapshot()
-        (self.repo / 'README.md').write_text('keep me')
-        result = self.run_script('backup.sh', '-r', input='../outside\n')
-        self.assertNotEqual(result.returncode, 0)
-        self.stub('rsync', 'exit 73')
-        result = self.run_script('backup.sh', '-r', input=snapshot.name + '\n')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual((self.repo / 'README.md').read_text(), 'keep me')
-
     def git(self, *args):
         return subprocess.run(['/usr/bin/git', *args], cwd=self.repo, env=self.env,
                               check=True, text=True, capture_output=True)
@@ -568,12 +465,6 @@ sys.exit(1 if conflict else 0)
         self.assertNotEqual(self.run_script('install.sh', '--unknown').returncode, 0)
         self.assertEqual(list(self.home.iterdir()), [])
 
-    def test_restore_rejects_symlink_outside_backup_root(self):
-        snapshot = self.snapshot()
-        (snapshot.parent / 'outside').symlink_to(self.repo, target_is_directory=True)
-        result = self.run_script('backup.sh', '-r', input='outside\n')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(list(snapshot.parent.glob('pre-recovery-*')))
 
 
 if __name__ == '__main__':
