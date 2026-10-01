@@ -61,6 +61,13 @@ Filetypes without an explicit fixer list use the fallback whitespace fixers.
 Ruff fixes supported lint issues and formats valid Python; syntax errors still
 need manual correction.
 
+To verify this checkout without changing your HOME symlinks, start Vim with
+`vim -u /Users/fei-mba/Docs/dotfiles/stow/vim/.vimrc your-file.md`
+(use a `.py` file for Python). Existing Vim sessions keep their loaded settings;
+check `:echo $MYVIMRC` to see which configuration they loaded.
+Keep `markdownlint` as a linter only: ALE's Markdownlint fixer can return CLI
+help text instead of corrected buffer contents.
+
 ---
 
 ## ⌨️ General Mappings (Leader = `,`)
