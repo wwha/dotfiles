@@ -1,0 +1,11 @@
+#!/bin/sh
+if ! command -v gitleaks >/dev/null 2>&1; then
+    printf '%s\n' 'gitleaks is required for the global pre-commit scan. Run ./install.sh deps.' >&2
+    exit 1
+fi
+gitleaks git --pre-commit --redact --staged || exit $?
+git_dir=$(git rev-parse --git-common-dir) || exit $?
+local_hook="$git_dir/hooks/pre-commit"
+if [ -x "$local_hook" ] && [ "$(cd "$(dirname "$local_hook")" && pwd -P)/$(basename "$local_hook")" != "$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")" ]; then
+    exec "$local_hook" "$@"
+fi

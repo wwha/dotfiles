@@ -1,106 +1,63 @@
-# Compatibility migration: phase one
+# Stow migration
 
-This phase prepares a safer installer and fixes configuration defects. It does
-not migrate the current Mac. Development happens in a separate worktree; the
-active checkout, HOME links and running applications stay unchanged. Owner
-confirmation of real-machine migration is required before a second deletion PR.
+This pull request changes the repository layout. It does not migrate the active
+Mac. Existing links may point into the checkout, so pulling or switching the
+active checkout can activate changed files immediately. Use a permanent separate
+checkout for the new layout and keep the old checkout until migration succeeds.
 
-## Impact inventory
+## Review and install
 
-Changes below take effect only when the Mac reads the new files. Do not pull,
-checkout or edit these changes in the active repository as a way to preview them.
+Before activating this version:
 
-| Existing entry | Phase-one behavior / new entry | Migration and rollback |
-| --- | --- | --- |
-| `install.sh` | Offline; full conflict preflight; conflicts stop by default; explicit `--backup`; SSH link is opt-in via `--ssh` | Review `--dry-run` first. Restore displaced objects from printed private backup paths. |
-| Automatic package downloads | Explicit `install-deps.sh` and Brewfile; no fetched shell installer or floating Git clone | Homebrew can upgrade packages. Vim `:PlugInstall` executes declared third-party plugin code; review declarations before running. |
-| `~/.git-template` | Existing links/files/hooks preserved; missing defaults in a real directory are filled; fresh installs get no hooks | Preserve old checkout while its template link is in use. Disable hooks only as a separate migration. |
-| Global Git ignore | Removes broad database/dependency exclusions; keeps OS/editor files | Previously ignored project artifacts may now appear untracked. Check worktree status and move project-specific patterns into each project. |
-| Git local include | Loaded last, so local values now win | Review duplicate settings; restore the previous config link to roll back. |
-| `new-script`, `script-template`, `set-wifi-dns` | Existing links and tracked sources retained; not installed for new users | Copy tools to private storage and repoint links before any later deletion. Network tool still changes IP and DNS. |
-| Conda/NVM/API keys | Removed from shared startup; optional local initialization examples | Add only the paths and secrets file used on this Mac to `.zshrc.local`; check each initializer once. |
-| Bun/bunx | Shared completion, BUN_INSTALL and PATH initialization removed; programs remain installed | New terminals may not find commands installed only in ~/.bun/bin. Restore initialization via the optional local snippet in README. |
-| ShellCheck | Removed from Brewfile, Vim shell linters and the retained pre-commit hook | Existing linked hook sources change on activation; already copied project hooks and installed programs are untouched. Zsh syntax checks remain. |
-| `~/.zshrc.local`, `~/.vimrc.local`, `~/.tmux.conf.local` | Existing tail overrides remain | Review their contents before activation; restore saved versions for rollback. |
-| Rime and automatic tmux | No startup prompt or automatic tmux session; Rime update remains a manual function | Start tmux explicitly. Source the Rime helper and run `rime_ice_update` when wanted. |
-| Vim | Recovery defaults enabled; save-time fix/trim, file templates and OSC52 are opt-in; shell ALE linters disabled | Existing modified buffers are protected by normal `:bdelete` prompting. Review Vim plugin declarations before `:PlugInstall`. |
-| tmux | Clipboard is `external`: tmux copy commands may reach the terminal, applications inside tmux cannot set outer clipboard | Test a separate server before reloading a long-lived one; existing sessions are not reloaded automatically. |
-| Network script | Requires explicit interface and address values; original private network values removed | Review arguments carefully before running because it changes system network settings. |
-| `backup.sh` | Legacy snapshot/overlay recovery retained unchanged | Keep existing snapshots. Verify private/system backup before retiring this script in phase two. |
+1. Record the active checkout revision, uncommitted work and literal targets for
+   each existing dotfile link. Keep a private backup outside the repository of
+   the checkout, local overrides, credentials and any other files involved.
+2. Review all Stow packages and the Git history for secrets, identity, internal
+   paths and network details. Enable GitHub push protection. Rotate any real
+   credential found in history before cleaning the history.
+3. Clone or prepare this revision in a permanent checkout. Run `./install.sh
+   --dry-run`; review every link and conflict. The default is `zsh git vim tmux`.
+   Add `--ssh` only after reviewing the public SSH defaults and private local
+   include.
+4. If conflicts are expected, retain the preview and run `./install.sh
+   --backup` only after reviewing the private backup location. The installer
+   preserves displaced files, directories and symlinks under
+   `~/.dotfiles_backups`, then Stow creates leaf links with `--no-folding`.
+5. Run `./install.sh deps` only when ready to install missing dependencies.
+   `./install.sh update` is a separate explicit upgrade. Neither is needed just
+   to link configuration.
+6. In new processes, check shell startup, Git identity, SSH configuration, Vim
+   editing and tmux. Keep the old checkout and private backups until these checks
+   succeed.
 
-## Before any real-machine activation
+Never run installation or restore tests against the real HOME. The test suite
+uses temporary HOME directories and command substitutes.
 
-These are **future manual steps**, not actions performed by this PR or its tests.
+## Transitional files
 
-1. Keep an existing terminal and tmux session open. Record the active checkout's
-   commit, uncommitted changes, and every managed link's literal target. Preserve
-   that checkout at its current state; do not use `git reset` or discard changes.
-2. Create a private backup directory outside the repository (`umask 077` and
-   `mktemp -d` under HOME). Copy the active checkout including uncommitted files,
-   HOME local overrides, `.api_keys`, and any other private configuration you
-   will change. Preserve symlinks as links (`cp -pPR`) and separately copy the
-   contents of external targets needed for recovery. Keep a record of absent
-   files too. Do not publish the backup or copy it into Git.
-3. Inspect existing local overrides because the new Zsh/Vim/tmux entry points
-   will now execute them. Check the Git ignore impact in representative projects.
-   Confirm a separate private/system backup actually contains recoverable files;
-   its existence is not implied by this repository.
-4. Prepare the reviewed revision in a **permanent separate checkout**, not an
-   ephemeral development worktree. Run its `install.sh --dry-run` and review every
-   target. Leave old template and command links pointed at the preserved checkout.
-5. Only after explicit activation approval, run the offline installer there. Save
-   its printed conflict backup paths. Dependency setup is a separate choice; it
-   can change installed package versions, so do not run it just to repoint links.
-6. Verify in new processes: Git identity and ignores, SSH effective settings and a
-   known host, Vim startup and edits, shell commands and initializers. Test tmux
-   with a separate socket before reloading the existing server. Keep old processes
-   open until validation is complete; do not force a shell restart or kill sessions.
+The old source paths and repository snapshot script remain during this first
+phase so current HOME links do not become dangling before the owner performs the
+device migration. `new-script` and `script-template` are no longer installed by
+the new setup. If `set-wifi-dns` is still needed, copy it to `~/.local/bin/` and
+provide that Mac's network values privately. Once the owner confirms migration,
+a follow-up change can delete the obsolete source paths, scripts and `backup.sh`.
+Conflict backups for files displaced by Stow remain part of the installer.
 
 ## Rollback
 
-For each changed HOME destination, first confirm it is still the newly installed
-symlink and has no later user edits. Unlink that symlink, then move the saved
-original object from its printed conflict backup path back to the destination.
-This restores files, directories and symlink text; relative symlinks resolve
-correctly again at their original location. For originally absent destinations,
-remove only the newly created links. Restore separately saved local files if they
-were edited, and keep the preserved old checkout available for restored links.
+For each changed destination, verify that it is still the Stow-created symlink.
+Remove only that link, then restore the saved object from its matching relative
+path under the printed private backup directory. For paths that were absent
+before installation, remove only the new link. A saved symlink records its link
+text; separately preserve external targets whose contents matter.
 
-A link backup alone cannot undo edits to its target. If the active checkout was
-updated despite the separation above, recover its files from the pre-activation
-copy first, preserving any later work separately. Git restores only committed
-content. Do not overlay the legacy `backup.sh` snapshot into an active checkout
-as an automatic rollback.
+Git restores committed repository contents. It cannot roll back local edits,
+package updates, private files or data behind links. Keep the old checkout and a
+separate private/system backup until the new configuration is verified.
 
-Open a new terminal/Vim against restored files. A tmux server already reloaded
-with the new configuration may retain options absent from the old config; validate
-the old config on a separate server and restore changed options explicitly without
-killing existing sessions. Configuration rollback does not undo package upgrades.
+## References
 
-## Gate for phase two
-
-The owner must confirm the real environment works and the following migrations
-are complete before old tracked files are deleted:
-
-- Move only needed machine initializers into local files. Check Conda/NVM and
-  secret loading. Bun remains opt-in through local configuration.
-- If retaining the old script generator, copy **both** generator and template into
-  the same private scripts directory, plus the network script if needed. Repoint
-  each command link and test help/generation without changing network settings.
-- Replace the legacy template symlink with a reviewed directory retaining ignore
-  and commit-template files but no default hooks. Existing project hooks are copies:
-  inspect and disable only the intended hooks in each project, separately. Do not
-  scan and delete hooks globally.
-- Move project-specific ignore rules to the relevant projects. Confirm Rime
-  updates are explicit and startup no longer prompts. Confirm the replacement
-  backup can restore private files.
-- Record successful checks and rollback location in the second PR. Passing isolated
-  tests or merging phase one alone is not migration confirmation.
-
-## Practice references
-
-[GNU Stow](https://www.gnu.org/software/stow/) documents the symlink approach;
-[Homebrew Bundle](https://docs.brew.sh/Brew-Bundle-and-Brewfile) documents dependency
-lists. [Git's ignore documentation](https://git-scm.com/docs/gitignore) distinguishes
-shared project rules from personal global patterns. This phase retains the current
-layout and postpones behavior removal until migration is verified.
+[GNU Stow manual](https://www.gnu.org/software/stow/manual/stow.html)
+[Homebrew Bundle](https://docs.brew.sh/Brew-Bundle-and-Brewfile)
+[Git ignore documentation](https://git-scm.com/docs/gitignore)
+[GitHub push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection)
