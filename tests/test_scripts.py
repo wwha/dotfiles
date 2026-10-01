@@ -319,7 +319,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output.read_text(), '4\n[]\n[]\n')
 
-    def test_vim_preserves_recovery_and_disables_automatic_edits_by_default(self):
+    def test_vim_preserves_recovery_and_enables_ale_save_fixes(self):
         output = self.base / 'vim-options'
         script = self.base / 'probe.vim'
         script.write_text("call writefile([string(&swapfile), string(&backup), string(g:ale_fix_on_save), string(exists('#osc52#TextYankPost')), string(exists('#file_templates#BufNewFile'))], '" + str(output) + "')\nqa!\n")
@@ -328,7 +328,7 @@ sys.exit(1 if conflict else 0)
                                 env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         values = output.read_text().splitlines()
-        self.assertEqual(values[:3], ['1', '0', '0'])
+        self.assertEqual(values[:3], ['1', '0', '1'])
         self.assertEqual(values[3:], ['1', '0'])
 
     def test_vim_python_and_markdown_fix_on_save_and_mapping(self):
@@ -342,7 +342,8 @@ sys.exit(1 if conflict else 0)
         (self.home / '.vim/plugged').symlink_to(plugin_home / 'plugged')
         for ext, before, expected in (
                 ('py', 'import os\nx=  1\n', 'x = 1\n'),
-                ('md', '# Title\n\ntext   \n\n\n\n', '# Title\n\ntext\n')):
+                ('md', '# Title\n\ntext   \n\n\n\n', '# Title\n\ntext\n'),
+                ('md', '# Title\n\ntext   \nnext\n\n\n', '# Title\n\ntext  \nnext\n')):
             for action in ('write', 'call feedkeys(",af", "xt")'):
                 with self.subTest(filetype=ext, action=action):
                     target = self.base / ('fix.' + ext)
