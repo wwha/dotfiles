@@ -44,9 +44,6 @@ let mapleader = ","
 " Fast saving
 nmap <leader>w :w!<cr>
 
-" :W sudo saves the file
-" (useful for handling the permission-denied error)
-command! W execute 'w !sudo tee % > /dev/null' <bar> edit!
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -166,10 +163,7 @@ set ffs=unix,dos,mac
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " => Files, backups and undo
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Turn backup off, since most stuff is in SVN, git etc. anyway...
-set nobackup
-set nowb
-set noswapfile
+" Keep Vim's recovery and backup defaults.
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -291,7 +285,7 @@ fun! CleanExtraSpaces()
 endfun
 
 if has("autocmd")
-    autocmd BufWritePre *.txt,*.js,*.py,*.wiki,*.sh,*.coffee :call CleanExtraSpaces()
+    autocmd BufWritePre *.txt,*.js,*.py,*.wiki,*.sh,*.coffee :if get(g:, 'dotfiles_trim_whitespace_on_save', 0) | call CleanExtraSpaces() | endif
 endif
 
 " Map <j,k> to esc
@@ -315,7 +309,7 @@ endfunction
 " Automatically yank to OSC 52 after any yank operation
 augroup osc52
     autocmd!
-    autocmd TextYankPost * if v:event.operator == 'y' | call Osc52Yank() | endif
+    autocmd TextYankPost * if get(g:, 'dotfiles_osc52_yank', 0) && v:event.operator == 'y' | call Osc52Yank() | endif
 augroup END
 
 
@@ -376,7 +370,7 @@ function! <SID>BufcloseCloseIt()
     endif
 
     if buflisted(l:currentBufNum)
-        execute("bdelete! ".l:currentBufNum)
+        execute("bdelete ".l:currentBufNum)
     endif
 endfunction
 
@@ -416,7 +410,7 @@ normal G
 normal o
 normal o
 endfunc
-autocmd bufnewfile *.py call SetPyTitle()
+autocmd bufnewfile *.py if get(g:, 'dotfiles_enable_file_templates', 0) | call SetPyTitle() | endif
 
 " Functions for createing c code title
 func SetCTitle()
@@ -448,7 +442,7 @@ normal G
 normal o
 normal o
 endfunc
-autocmd bufnewfile *.sh call SetShTitle()
+autocmd bufnewfile *.sh if get(g:, 'dotfiles_enable_file_templates', 0) | call SetShTitle() | endif
 
 " Vim-plug configuration
 " Run :PlugInstall in Vim to install plugins
@@ -474,6 +468,8 @@ let g:ale_linters = {
 \   'c': ['clangd'],
 \   'cpp': ['clangd'],
 \   'markdown': ['markdownlint'],
+\   'sh': [],
+\   'zsh': [],
 \}
 
 " Keep linting disabled for local environment files
@@ -482,7 +478,7 @@ let g:ale_pattern_options = {
 \}
 
 " Set this variable to 1 to fix files when you save them.
-let g:ale_fix_on_save = 1
+let g:ale_fix_on_save = 0
 
 let g:ale_fixers = {
 \   '*': ['remove_trailing_lines', 'trim_whitespace'],
@@ -509,6 +505,10 @@ nnoremap <C-n> :NERDTreeToggle<CR>
 let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '\.o$', '\.obj$']
 
+" Set these in ~/.vimrc.local to opt into save-time edits or terminal clipboard access:
+" let g:dotfiles_trim_whitespace_on_save = 1
+" let g:dotfiles_enable_file_templates = 1
+" let g:dotfiles_osc52_yank = 1
 " Machine-specific settings override shared defaults.
 if filereadable(expand("~/.vimrc.local"))
     source ~/.vimrc.local
