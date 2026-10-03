@@ -1,7 +1,7 @@
 # Working on dotfiles
 
 This repository manages a personal macOS environment through shared configuration
-and symlinks. Read CONTEXT.md when changing installation or backup semantics.
+and symlinks. Read docs/CONTEXT.md when changing installation or backup semantics.
 
 ## Verification
 

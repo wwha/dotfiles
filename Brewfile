@@ -1,6 +1,7 @@
 # Explicit dependency list; no applications or machine inventory.
-brew "git"
-brew "vim"
+# Git and Vim use the versions provided by macOS.
+brew "stow"
+brew "uv"
 brew "git-delta"
 brew "gitleaks"
 brew "pre-commit"
