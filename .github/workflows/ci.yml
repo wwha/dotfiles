@@ -18,8 +18,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: brew install stow gitleaks tmux
+      - run: brew install stow gitleaks tmux zoxide direnv fzf fd ripgrep ruff prettier
       - run: gitleaks git --redact --verbose --log-opts="--all"
+      - run: zsh tests/prepare-ci.zsh "$RUNNER_TEMP/dotfiles-home"
       - run: |
+          export HOME="$RUNNER_TEMP/dotfiles-home"
+          export ZDOTDIR="$HOME"
           /usr/bin/ssh -V
-          zsh tests/check.zsh --all
+          zsh tests/check.zsh --ci

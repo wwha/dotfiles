@@ -831,7 +831,27 @@ printf "%s\\n" "$@" >> "$HOME/brew-args"''')
         self.assertNotEqual(self.run_script('install.sh', '--unknown').returncode, 0)
         self.assertEqual(list(self.home.iterdir()), [])
 
+    def test_ci_mode_rejects_skipped_tests(self):
+        self.git('init', '--template=')
+        for test in (self.repo / 'tests').glob('test_*.py'):
+            test.unlink()
+        (self.repo / 'tests/test_skip.py').write_text(
+            'import unittest\n'
+            'class MissingDependency(unittest.TestCase):\n'
+            '    @unittest.skip("missing integration dependency")\n'
+            '    def test_integration(self): pass\n')
+        regular = self.run_script('tests/check.zsh', '--all')
+        self.assertEqual(regular.returncode, 0, regular.stderr)
+        strict = self.run_script('tests/check.zsh', '--ci')
+        self.assertNotEqual(strict.returncode, 0)
+        self.assertIn('skipped tests are failures', strict.stderr)
 
+    def test_ci_preparation_refuses_current_home(self):
+        self.env['RUNNER_TEMP'] = str(self.base)
+        result = self.run_script('tests/prepare-ci.zsh', str(self.home))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('separate HOME', result.stderr)
+        self.assertEqual(list(self.home.iterdir()), [])
 
     def test_tailscale_alias_preserves_cli_without_gui(self):
         app = self.base / 'Tailscale.app/Contents/MacOS/Tailscale'
@@ -856,6 +876,7 @@ printf "%s\\n" "$@" >> "$HOME/brew-args"''')
         result = invoke()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), 'fixture-gui')
+
 
 
 if __name__ == '__main__':

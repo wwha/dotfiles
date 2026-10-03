@@ -127,7 +127,9 @@ zsh tests/check.zsh --all     # macOS isolated behavior tests
 
 Never test installation or restoration against your real HOME. Behavior tests
 use temporary directories and command substitutes. Cloud runs static checks;
-macOS CI runs the behavior suite. Follow the repository's branch-protection
+macOS CI prepares integration tools and plugins in a disposable HOME and runs
+`zsh tests/check.zsh --ci`, which fails if any behavior test is skipped.
+Follow the repository's branch-protection
 workflow below before merging changes.
 
 In Codex Cloud, create an environment for `wwha/dotfiles` with `main` as its base.
