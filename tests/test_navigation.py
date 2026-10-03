@@ -51,7 +51,10 @@ class Navigation(unittest.TestCase):
                     if predicate():
                         return
                     time.sleep(0.05)
-                self.fail('Navigation did not reach the expected state')
+                self.fail('Navigation did not reach the expected state; '
+                          'Vim=' + vim + '; state=' + (state.read_text() if state.exists() else 'missing') +
+                          '; pane=' + run('display-message', '-p', '#{pane_id}') +
+                          '; screen=' + run('capture-pane', '-p', '-t', vim_pane))
 
             state = base / 'state'
             script = base / 'start.vim'
@@ -59,7 +62,7 @@ class Navigation(unittest.TestCase):
                 'set runtimepath+=' + str(plugin) + '\n'
                 'runtime plugin/tmux_navigator.vim\n'
                 'vsplit\nwincmd h\n'
-                'nnoremap <F6> :call writefile([string(winnr())], "' + str(state) + '")<CR>\n'
+                'nnoremap <F6> :call writefile([string(winnr()), maparg("<C-l>", "n"), mode()], "' + str(state) + '")<CR>\n'
                 'call writefile(["ready"], "' + str(state) + '")\n')
             master, slave = pty.openpty()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 160, 0, 0))
@@ -101,7 +104,7 @@ class Navigation(unittest.TestCase):
                     state.unlink(missing_ok=True)
                     run('send-keys', '-t', vim_pane, 'F6')
                     wait_for(state.exists)
-                    return state.read_text().strip()
+                    return state.read_text().partition('\n')[0]
 
                 os.write(master, b'\x0c')  # Ctrl-l: move within Vim first.
                 wait_for(lambda: window_number() == '2')
