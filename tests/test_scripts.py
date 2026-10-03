@@ -566,8 +566,10 @@ sys.exit(1 if conflict else 0)
         self.assertEqual((self.home / 'nvm-loads').read_text().splitlines(), ['loaded'])
 
     def test_zsh_preserves_initializers_without_local_override(self):
+        self.stub('zoxide', 'printf "%s\\n" "$*" > "$HOME/zoxide-args"')
         for name, body in {
-            '.oh-my-zsh/oh-my-zsh.sh': 'export OMZ_LOADED=yes',
+            '.oh-my-zsh/oh-my-zsh.sh': 'export OMZ_LOADED=yes\n'
+                                     'path=("' + str(self.bin) + '" /usr/bin /bin)',
             'miniconda3/bin/conda': '#!/bin/sh\nprintf "export CONDA_LOADED=yes\\n"',
             '.nvm/nvm.sh': 'export NVM_LOADED=yes',
             '.api_keys': 'export TEST_API_KEY=fixture',
@@ -585,6 +587,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), 'yes absent deferred  1')
         self.assertEqual(result.stderr, '')
+        self.assertEqual((self.home / 'zoxide-args').read_text().strip(), 'init zsh')
 
     def test_shared_ssh_autostarts_tmux_only_without_remote_command(self):
         config = self.repo / 'stow/ssh/.ssh/config'

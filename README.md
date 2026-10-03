@@ -188,7 +188,9 @@ editing, running a service, and viewing logs. Use panes when simultaneous views
 are useful; they are optional, not the main way to organize work. Multiple
 clients attached to one session share its current window and running programs.
 
-The shared SSH configuration requires a client supporting `Match command`.
+The optional shared SSH configuration requires OpenSSH 10.0 or newer for
+`Match command`; check `/usr/bin/ssh -V` before installing it. macOS CI uses
+macOS 26 to test the system client with this capability.
 Ordinary `ssh host` requests a terminal and runs the server's login shell to
 create or attach to its `main` tmux session. Detaching ends the SSH connection,
 while the session and its programs remain running. The server must have tmux
