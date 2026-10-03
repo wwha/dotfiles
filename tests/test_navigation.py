@@ -62,7 +62,12 @@ class Navigation(unittest.TestCase):
                 'set runtimepath+=' + str(plugin) + '\n'
                 'runtime plugin/tmux_navigator.vim\n'
                 'vsplit\nwincmd h\n'
-                'nnoremap <F6> :call writefile([string(winnr()), maparg("<C-l>", "n"), mode()], "' + str(state) + '")<CR>\n'
+                'let g:state_file = "' + str(state) + '"\n'
+                'function! ReportWindow()\n'
+                '  call writefile([string(winnr()), maparg("<C-l>", "n"), mode()], g:state_file . ".tmp")\n'
+                '  call rename(g:state_file . ".tmp", g:state_file)\n'
+                'endfunction\n'
+                'nnoremap <silent> <F6> :call ReportWindow()<CR>\n'
                 'call writefile(["ready"], "' + str(state) + '")\n')
             master, slave = pty.openpty()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 160, 0, 0))
@@ -106,6 +111,9 @@ class Navigation(unittest.TestCase):
                     wait_for(state.exists)
                     return state.read_text().partition('\n')[0]
 
+                # The startup script can finish before the attached client is
+                # ready for input. Confirm Vim processes a key before navigating.
+                wait_for(lambda: window_number() == '1')
                 os.write(master, b'\x0c')  # Ctrl-l: move within Vim first.
                 wait_for(lambda: window_number() == '2')
                 self.assertEqual(active(), vim_pane)
