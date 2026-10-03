@@ -727,7 +727,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '1500')
         self.assertEqual(tmux_run('show-options', '-sv', 'copy-command').stdout.strip(), '')
         self.assertEqual(tmux_run('show-options', '-sv', 'set-clipboard').stdout.strip(), 'external')
-        self.assertEqual(tmux_run('show-options', '-gv', 'allow-passthrough').stdout.strip(), 'on')
+        self.assertEqual(tmux_run('show-options', '-gv', 'allow-passthrough').stdout.strip(), 'off')
         self.assertEqual(tmux_run('show-options', '-gv', 'default-terminal').stdout.strip(), 'tmux-256color')
         self.assertEqual(tmux_run('show-options', '-gv', 'default-command').stdout.strip(), '')
 

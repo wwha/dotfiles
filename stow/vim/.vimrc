@@ -271,15 +271,19 @@ inoremap jk <Esc>
 " This allows yanking from Vim over SSH/Tmux to the local clipboard.
 " Requires a terminal that supports OSC 52 (e.g., iTerm2, Kitty, Alacritty).
 function! Osc52Yank()
+    if $TMUX != ''
+        call system('tmux load-buffer -w -', getreg('0'))
+        if v:shell_error
+            echoerr 'OSC 52: tmux clipboard copy failed'
+        endif
+        return
+    endif
     let b64 = substitute(system('base64', getreg('0')), '\n', '', 'g')
     if v:shell_error
         echoerr 'OSC 52: base64 failed'
         return
     endif
     let sequence = "\e]52;c;" . b64 . "\x07"
-    if $TMUX != ''
-        let sequence = "\ePtmux;" . substitute(sequence, "\e", "\e\e", 'g') . "\e\\"
-    endif
     call writefile([sequence], "/dev/tty", "b")
 endfunction
 
