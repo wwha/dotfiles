@@ -1,13 +1,13 @@
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
-# Apple Silicon Homebrew path
-[[ -d /opt/homebrew/bin ]] && export PATH="/opt/homebrew/bin:$PATH"
-# Homebrew LLVM is keg-only; expose its tools when installed.
-if [[ -d /opt/homebrew/opt/llvm/bin ]]; then
-    export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-fi
+# Keep PATH entries unique when shell configuration is reloaded.
+typeset -U path PATH
 # User scripts path
 export PATH="$HOME/.local/bin:${PATH}"
+# Homebrew LLVM is keg-only; expose its tools when installed.
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+# Homebrew path
+export PATH="/opt/homebrew/bin:$PATH"
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
@@ -77,29 +77,38 @@ ZSH_THEME="robbyrussell"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
+
 plugins=(git
-	z
+    direnv
+    nvm
     vi-mode
+    fzf
     uv
     tmux
+    zsh-autosuggestions
+    zsh-syntax-highlighting
 )
 
+zstyle ':omz:plugins:nvm' lazy yes
 
-if [[ -f "$ZSH/oh-my-zsh.sh" ]]; then
-    source "$ZSH/oh-my-zsh.sh"
-fi
+# Configure fzf before Oh My Zsh initializes its plugin.
+export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+export FZF_ALT_C_COMMAND='fd --type d --hidden --exclude .git'
 
-for plugin_file in \
-    /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh; do
-    if [[ -r "$plugin_file" ]]; then
-        source "$plugin_file"
-        break
-    fi
-done
+source "$ZSH/oh-my-zsh.sh"
+
 # User configuration
 #
-# Preventing commands with a leading space from being included by zsh-autosuggestions
-setopt HIST_IGNORE_SPACE
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=120000
+SAVEHIST=100000
+
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_FIND_NO_DUPS
+setopt HIST_SAVE_NO_DUPS
+setopt SHARE_HISTORY
+setopt APPEND_HISTORY
 
 # export MANPATH="/usr/local/man:$MANPATH"
 
@@ -125,61 +134,10 @@ setopt HIST_IGNORE_SPACE
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
-# Automatically start tmux in local Terminal/iTerm sessions.
-if [[ -z "$TMUX" && "$TERM_PROGRAM" != "vscode" && -z "$SSH_CONNECTION" ]]; then
-    if [[ "$TERM_PROGRAM" == "iTerm.app" || "$TERM_PROGRAM" == "Apple_Terminal" ]] && command -v tmux >/dev/null 2>&1; then
-        if tmux has-session -t default 2>/dev/null; then
-            tmux new-session -s "session-$(date +%H%M%S)"
-        else
-            tmux new-session -s default
-        fi
-    fi
-fi
-
 export HOMEBREW_NO_ANALYTICS=1
-# Load common optional tools from their conventional user installs.
-if [[ -x "$HOME/miniconda3/bin/conda" ]]; then
-    eval "$("$HOME/miniconda3/bin/conda" shell.zsh hook)"
-fi
-export NVM_DIR="$HOME/.nvm"
-[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
-[[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]] && alias tailscale='/Applications/Tailscale.app/Contents/MacOS/Tailscale'
+alias tailscale='/Applications/Tailscale.app/Contents/MacOS/Tailscale'
 
-_dotfiles_valid_ssh_host() {
-    [[ "$1" =~ '^[A-Za-z0-9._@:%+-]+$' ]]
-}
+# Initialize zoxide after other shell customizations.
+eval "$(zoxide init zsh)"
 
-ssht() {
-    local host="${1:?Host required}"
-    local session="${2:-main-$(date +%H%M%S)}"
-    _dotfiles_valid_ssh_host "$host" && [[ "$session" =~ '^[A-Za-z0-9_.-]+$' ]] || {
-        print -u2 'Host or tmux session contains unsupported characters.'; return 2
-    }
-    local remote_command="exec zsh -l -c 'tmux new-session -s $session'"
-    if [[ -n "$TMUX" ]]; then
-        tmux detach-client -E "ssh -t $host \"$remote_command\""
-    else
-        ssh -t "$host" "$remote_command"
-    fi
-}
-
-sshp() {
-    local host="${1:?Host required}"
-    _dotfiles_valid_ssh_host "$host" || {
-        print -u2 'Host contains unsupported characters.'; return 2
-    }
-    if [[ -n "$TMUX" ]]; then
-        tmux detach-client -E "ssh $host"
-    else
-        ssh "$host"
-    fi
-}
-
-if [[ -r "$HOME/.config/dotfiles/zsh/rime-ice-update.zsh" ]]; then
-    source "$HOME/.config/dotfiles/zsh/rime-ice-update.zsh"
-fi
-
-# zsh-syntax-highlighting must load after other ZLE/widget customizations.
-if [[ -r /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]]; then
-    source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-fi
+export EDITOR=vim

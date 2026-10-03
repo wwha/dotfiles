@@ -82,6 +82,24 @@ if [[ "$mode" == deps || "$mode" == update ]]; then
             vim -Nu "$BASEDIR/stow/vim/.vimrc" -i NONE -es -c PlugUpdate -c qall
         fi
     fi
+    plugin_root="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins"
+    for plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+        plugin_dir="$plugin_root/$plugin"
+        if [[ "$mode" == deps ]]; then
+            if [[ ! -e "$plugin_dir" && ! -L "$plugin_dir" ]]; then
+                mkdir -p "$plugin_root"
+                plugin_tmp=$(mktemp -d "$plugin_root/.$plugin.XXXXXX")
+                rmdir "$plugin_tmp"
+                if ! git clone --depth=1 "https://github.com/zsh-users/$plugin.git" "$plugin_tmp"; then
+                    rm -rf "$plugin_tmp"
+                    exit 1
+                fi
+                mv "$plugin_tmp" "$plugin_dir"
+            fi
+        elif [[ -d "$plugin_dir/.git" ]]; then
+            git -C "$plugin_dir" pull --ff-only
+        fi
+    done
     exit 0
 fi
 
