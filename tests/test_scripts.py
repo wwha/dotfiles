@@ -833,5 +833,30 @@ printf "%s\\n" "$@" >> "$HOME/brew-args"''')
 
 
 
+    def test_tailscale_alias_preserves_cli_without_gui(self):
+        app = self.base / 'Tailscale.app/Contents/MacOS/Tailscale'
+        config = self.repo / 'stow/zsh/.zshrc'
+        config.write_text(config.read_text().replace(
+            '/Applications/Tailscale.app/Contents/MacOS/Tailscale', str(app)))
+        omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
+        omz.parent.mkdir()
+        omz.write_text('path=("' + str(self.bin) + '" /usr/bin /bin)\n')
+        self.stub('zoxide', 'exit 0')
+        self.stub('tailscale', 'echo fixture-cli')
+        def invoke():
+            return subprocess.run(['/bin/zsh', '-f', '-c',
+                                   'source "$1"; eval tailscale', 'probe', str(config)],
+                                  env=self.env, text=True, capture_output=True, timeout=10)
+        result = invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'fixture-cli')
+        app.parent.mkdir(parents=True)
+        app.write_text('#!/bin/sh\necho fixture-gui\n')
+        app.chmod(0o755)
+        result = invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'fixture-gui')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -135,7 +135,7 @@ setopt APPEND_HISTORY
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
 export HOMEBREW_NO_ANALYTICS=1
-alias tailscale='/Applications/Tailscale.app/Contents/MacOS/Tailscale'
+[[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]] && alias tailscale='/Applications/Tailscale.app/Contents/MacOS/Tailscale'
 
 # Initialize zoxide after other shell customizations.
 eval "$(zoxide init zsh)"
