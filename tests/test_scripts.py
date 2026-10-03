@@ -292,6 +292,73 @@ sys.exit(1 if conflict else 0)
             cwd=self.repo, env=self.env, text=True, capture_output=True, timeout=20)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_git_defaults_reject_divergent_pull_and_reuse_unstaged_resolution(self):
+        result = self.run_script('install.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.env.pop('GIT_CONFIG_GLOBAL')
+        self.git('init', '--template=')
+        self.git('config', 'user.name', 'Fixture')
+        self.git('config', 'user.email', 'fixture@example.invalid')
+        file = self.repo / 'conflict.txt'
+        file.write_text('base\n')
+        self.git('add', 'conflict.txt')
+        self.git('commit', '-m', 'base')
+        other = self.base / 'other'
+        self.git('clone', '--template=', str(self.repo), str(other))
+        subprocess.run(['/usr/bin/git', '-C', str(other), 'config', 'user.name', 'Fixture'],
+                       env=self.env, check=True, capture_output=True)
+        subprocess.run(['/usr/bin/git', '-C', str(other), 'config', 'user.email', 'fixture@example.invalid'],
+                       env=self.env, check=True, capture_output=True)
+        (other / 'conflict.txt').write_text('remote\n')
+        for args in (['add', 'conflict.txt'], ['commit', '-m', 'remote']):
+            subprocess.run(['/usr/bin/git', '-C', str(other), *args], env=self.env,
+                           check=True, capture_output=True)
+        self.git('remote', 'add', 'origin', str(other))
+        file.write_text('local\n')
+        self.git('add', 'conflict.txt')
+        self.git('commit', '-m', 'local')
+        before = self.git('rev-parse', 'HEAD').stdout.strip()
+        pull = subprocess.run(['/usr/bin/git', 'pull', 'origin', 'main'],
+                              cwd=self.repo, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(pull.returncode, 0)
+        self.assertEqual(self.git('rev-parse', 'HEAD').stdout.strip(), before)
+        merge = subprocess.run(['/usr/bin/git', 'merge', 'origin/main'],
+                               cwd=self.repo, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(merge.returncode, 0)
+        self.assertIn('|||||||', file.read_text())
+        file.write_text('resolved\n')
+        self.git('add', 'conflict.txt')
+        self.git('commit', '-m', 'resolve')
+        self.git('reset', '--hard', before)
+        merge = subprocess.run(['/usr/bin/git', 'merge', 'origin/main'],
+                               cwd=self.repo, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(merge.returncode, 0)
+        self.assertEqual(file.read_text(), 'resolved\n')
+        self.assertTrue(self.git('ls-files', '-u').stdout)
+        self.assertEqual(self.git('config', '--get', 'core.pager').stdout.strip(), 'delta')
+        self.assertEqual(self.git('config', '--get', 'interactive.diffFilter').stdout.strip(),
+                         'delta --color-only')
+        self.assertEqual(self.git('config', '--get', 'alias.d').stdout.strip(), 'diff')
+        (self.home / '.gitconfig.local').write_text('[core]\n pager = cat\n')
+        self.assertEqual(self.git('config', '--get', 'core.pager').stdout.strip(), 'cat')
+
+    def test_global_ignore_keeps_project_files_visible(self):
+        (self.repo / '.gitignore').unlink()
+        result = self.run_script('install.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.env.pop('GIT_CONFIG_GLOBAL')
+        self.git('init', '--template=')
+        for name, expected in [('.DS_Store', 0), ('private.key', 0), ('id_ed25519', 0),
+                               ('.env.production', 0), ('settings.local.json', 0),
+                               ('build/source.c', 1), ('site/index.html', 1),
+                               ('dist/asset.js', 1), ('library.zip', 1),
+                               ('public.crt', 1), ('.vscode/settings.json', 1),
+                               ('.env.example', 1)]:
+            with self.subTest(name=name):
+                probe = subprocess.run(['/usr/bin/git', 'check-ignore', '--no-index', name],
+                                       cwd=self.repo, env=self.env, capture_output=True)
+                self.assertEqual(probe.returncode, expected)
+
     def test_repository_ignore_protects_secrets_without_hiding_project_files(self):
         self.git('init')
         for name in ('.api_keys', '.env.production', 'id_ed25519', 'private.pem'):

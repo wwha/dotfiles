@@ -1,17 +1,17 @@
 # This is a template gitconfig. Personal information should be added in ~/.gitconfig.local
 [core]
 	editor = vim
+	pager = delta
 	quotepath = false
 	excludesfile = ~/.git-template/gitignore
 [diff]
-	ignoresubmodules=dirty
 	tool = vimdiff
 [difftool]
 	prompt = false
 [alias]
-	d = difftool
+	d = diff
 [merge]
-	conflictstyle = diff3
+	conflictstyle = zdiff3
 	tool = vimdiff
 [mergetool]
 	prompt = false
@@ -31,12 +31,21 @@
 [fetch]
 	prune = true
 [pull]
-	rebase = true
+	ff = only
+	rebase = false
 [push]
 	default = current
 	autoSetupRemote = true
 [rebase]
-	autoStash = true
+	autoStash = false
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	line-numbers = true
+[rerere]
+	enabled = true
+	autoUpdate = false
 # Local settings take precedence over shared defaults.
 [include]
     path = ~/.gitconfig.local
