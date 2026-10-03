@@ -117,9 +117,10 @@ to paste into Vim, and `Ctrl-a ]` to paste the tmux buffer into a pane. OSC 52
 sets the clipboard; it does not read clipboard contents back into Vim.
 
 The iTerm2 client must permit applications to access the clipboard (Preferences
-or Settings → General → Selection). Remote `pbcopy` is not used. tmux allows
-passthrough for Vim's explicitly generated OSC 52 sequence and uses
-`set-clipboard external` for its own selections.
+or Settings → General → Selection). Remote `pbcopy` is not used. Inside tmux,
+Vim loads its explicit selection into a tmux buffer with `load-buffer -w`;
+tmux sends OSC 52 to the attached client. `set-clipboard external` ignores
+clipboard sequences from pane output, and raw passthrough is disabled.
 
 ## Terminal fzf shortcuts
 

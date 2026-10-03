@@ -5,6 +5,8 @@ from pathlib import Path
 import pty
 import re
 import select
+import shlex
+import sys
 import shutil
 import subprocess
 import struct
@@ -118,8 +120,12 @@ class Navigation(unittest.TestCase):
                 run('send-keys', '-t', vim_pane, ':call setline(1, "Vim clipboard probe")', 'Enter')
                 offset = len(output)
                 run('send-keys', '-t', vim_pane, ',y')
-                expected = b'\x1b]52;c;' + base64.b64encode(b'Vim clipboard probe\n') + b'\x07'
-                wait_for(lambda: expected in output[offset:])
+                def clipboard_payloads():
+                    matches = re.findall(rb'\x1b\]52;[^;]*;([A-Za-z0-9+/=]+)(?:\x07|\x1b\\)',
+                                         bytes(output[offset:]))
+                    return [base64.b64decode(value) for value in matches]
+
+                wait_for(lambda: b'Vim clipboard probe\n' in clipboard_payloads())
 
                 run('resize-pane', '-t', vim_pane, '-Z')
                 run('select-pane', '-t', shell_pane)
@@ -135,11 +141,29 @@ class Navigation(unittest.TestCase):
                 run('send-keys', '-t', shell_pane, '-X', 'copy-selection-and-cancel')
 
                 def copied_by_tmux():
-                    matches = re.findall(rb'\x1b\]52;[^;]*;([A-Za-z0-9+/=]+)(?:\x07|\x1b\\)',
-                                         bytes(output[offset:]))
-                    return any(b'tmux clipboard probe' in base64.b64decode(value) for value in matches)
+                    return any(b'tmux clipboard probe' in value for value in clipboard_payloads())
 
                 wait_for(copied_by_tmux)
+
+                # Unrequested output must neither reach the client clipboard nor
+                # replace tmux's buffer. Emit via a file so shell echo cannot
+                # contain the escape sequences we are trying to detect.
+                payload = b'unrequested clipboard probe'
+                raw = b'\x1b]52;c;' + base64.b64encode(payload) + b'\x07'
+                wrapped = b'\x1bPtmux;' + raw.replace(b'\x1b', b'\x1b\x1b') + b'\x1b\\'
+                emitter = base / 'emit.py'
+                emitter.write_text('import sys\n'
+                                   'sys.stdout.buffer.write(' + repr(raw + wrapped) + ')\n'
+                                   'print("blocked-output-complete", flush=True)\n')
+                previous_buffer = run('show-buffer')
+                offset = len(output)
+                run('send-keys', '-t', shell_pane, 'C-c')
+                run('send-keys', '-t', shell_pane,
+                    shlex.quote(sys.executable) + ' ' + shlex.quote(str(emitter)), 'Enter')
+                wait_for(lambda: 'blocked-output-complete' in run('capture-pane', '-p', '-t', shell_pane))
+                time.sleep(0.2)  # Allow the PTY reader to consume the final output.
+                self.assertNotIn(payload, clipboard_payloads())
+                self.assertEqual(run('show-buffer'), previous_buffer)
             finally:
                 subprocess.run([tmux, '-S', socket, 'kill-server'], env=env,
                                capture_output=True, timeout=10)
