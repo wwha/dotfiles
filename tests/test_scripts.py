@@ -773,7 +773,16 @@ sys.exit(1 if conflict else 0)
 
     def test_dependencies_are_explicit_and_fetch_latest_plugins_only_on_request(self):
         (self.home / '.zshrc').write_text('keep shell config')
-        self.stub('brew', 'printf "%s\\n" "$@" >> "$HOME/brew-args"')
+        self.stub('brew', '''[ "$HOMEBREW_BUNDLE_NO_UPGRADE" = 1 ] || exit 92
+for arg in "$@"; do
+    case "$arg" in
+        --file=*)
+            for package in stow uv; do
+                grep -qx "brew \\"$package\\"" "${arg#--file=}" || exit 93
+            done ;;
+    esac
+done
+printf "%s\\n" "$@" >> "$HOME/brew-args"''')
         self.stub('curl', 'printf "%s\\n" "$*" > "$HOME/curl-args"; while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then shift; : > "$1"; fi; shift; done')
         self.stub('git', 'printf "%s\\n" "$*" >> "$HOME/git-args"; mkdir -p "$4/tools" "$4/.git"; : > "$4/oh-my-zsh.sh"')
         self.stub('vim', 'printf "%s\\n" "$@" > "$HOME/vim-args"')
