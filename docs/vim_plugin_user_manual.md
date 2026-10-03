@@ -62,7 +62,7 @@ _Real-time linting and fixing._
   - `:ALEInfo`: See active linters and their status.
 - **Supported Linters/Fixers:**
   - **Python:** `ruff` (lint and fix), `ruff_format` (format)
-  - **C/C++:** `clangd` (lint/LSP), `clang-format` (fix)
+  - **C/C++:** `clang` (lint, Apple Clang), `clang-format` (fix)
   - **Markdown:** `markdownlint` (lint, MD013 disabled), `prettier` (fix)
 
 Only explicitly configured linters run; unlisted filetypes do not activate

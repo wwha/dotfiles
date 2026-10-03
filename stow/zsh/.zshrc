@@ -2,12 +2,8 @@
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
 # Keep PATH entries unique when shell configuration is reloaded.
 typeset -U path PATH
-# User scripts path
-export PATH="$HOME/.local/bin:${PATH}"
-# Homebrew LLVM is keg-only; expose its tools when installed.
-export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-# Homebrew path
-export PATH="/opt/homebrew/bin:$PATH"
+# Prefer Homebrew tools, then user scripts, while preserving inherited paths.
+path=(/opt/homebrew/bin "$HOME/.local/bin" "${path[@]}")
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
@@ -85,6 +81,7 @@ plugins=(git
     fzf
     uv
     tmux
+    zoxide
     zsh-autosuggestions
     zsh-syntax-highlighting
 )
@@ -136,8 +133,5 @@ setopt APPEND_HISTORY
 
 export HOMEBREW_NO_ANALYTICS=1
 [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]] && alias tailscale='/Applications/Tailscale.app/Contents/MacOS/Tailscale'
-
-# Initialize zoxide after other shell customizations.
-eval "$(zoxide init zsh)"
 
 export EDITOR=vim

@@ -400,8 +400,8 @@ sys.exit(1 if conflict else 0)
         plugin_home = Path(os.environ['HOME']) / '.vim'
         if not (plugin_home / 'plugged/ale/plugin/ale.vim').is_file():
             self.skipTest('ALE is not installed in the test host')
-        if not shutil.which('ruff') or not shutil.which('prettier'):
-            self.skipTest('Ruff and Prettier are required for fixer integration')
+        if any(not shutil.which(tool) for tool in ('ruff', 'prettier', 'clang-format')):
+            self.skipTest('Ruff, Prettier and clang-format are required for fixer integration')
         (self.home / '.vim').mkdir()
         (self.home / '.vim/autoload').symlink_to(plugin_home / 'autoload')
         (self.home / '.vim/plugged').symlink_to(plugin_home / 'plugged')
@@ -409,7 +409,8 @@ sys.exit(1 if conflict else 0)
                 ('py', 'import os\nx=  1\n', 'x = 1\n'),
                 ('py', 'while(True):\n    print("1")\n', 'while True:\n    print("1")\n'),
                 ('md', '# Title\n\ntext   \n\n\n\n', '# Title\n\ntext\n'),
-                ('md', '# Title\n\ntext   \nnext\n\n\n', '# Title\n\ntext  \nnext\n')):
+                ('md', '# Title\n\ntext   \nnext\n\n\n', '# Title\n\ntext  \nnext\n'),
+                ('cpp', 'int main(){return 0;}\n', 'int main() { return 0; }\n')):
             for action in ('write', 'call feedkeys(",af", "xt")'):
                 with self.subTest(filetype=ext, action=action):
                     target = self.base / ('fix.' + ext)
@@ -426,6 +427,30 @@ sys.exit(1 if conflict else 0)
                     self.assertEqual(output.read_text(), expected)
                     if action == 'write':
                         self.assertEqual(target.read_text(), expected)
+
+    def test_vim_cpp_lints_with_apple_clang(self):
+        plugin_home = Path(os.environ['HOME']) / '.vim'
+        if not (plugin_home / 'plugged/ale/plugin/ale.vim').is_file():
+            self.skipTest('ALE is not installed in the test host')
+        (self.home / '.vim').mkdir()
+        (self.home / '.vim/autoload').symlink_to(plugin_home / 'autoload')
+        (self.home / '.vim/plugged').symlink_to(plugin_home / 'plugged')
+        for content, invalid in (('int main() { return 0; }\n', False),
+                                 ('int main() { return missing; }\n', True)):
+            target = self.base / 'lint.cpp'
+            target.write_text(content)
+            output = self.base / 'diagnostics'
+            script = self.base / 'lint.vim'
+            script.write_text('let g:ale_cpp_cc_executable = "/usr/bin/clang++"\n'
+                              'edit ' + str(target) + '\nALELint\nsleep 2\n'
+                              'call writefile([string(len(ale#engine#GetLoclist(bufnr("%"))))], "'
+                              + str(output) + '")\nqa!\n')
+            result = subprocess.run(
+                ['/usr/bin/vim', '-N', '-u', str(self.repo / 'stow/vim/.vimrc'),
+                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(int(output.read_text()) > 0, invalid)
 
     def test_vim_buffer_close_does_not_discard_modified_content(self):
         target = self.base / 'unsaved.txt'
@@ -465,7 +490,10 @@ sys.exit(1 if conflict else 0)
             self.skipTest('zoxide is not installed')
         omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
         omz.parent.mkdir()
-        omz.write_text(':\n')
+        plugin = Path(os.environ['HOME']) / '.oh-my-zsh/plugins/zoxide/zoxide.plugin.zsh'
+        if not plugin.is_file():
+            self.skipTest('Oh My Zsh zoxide plugin is not installed')
+        omz.write_text('source ' + shlex.quote(str(plugin)) + '\n')
         target = self.base / 'project with spaces'
         target.mkdir()
         env = dict(self.env, _ZO_DATA_DIR=str(self.base / 'zoxide-data'))
@@ -493,7 +521,9 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         entries = result.stdout.splitlines()
         self.assertEqual(len(entries), len(set(entries)))
-        for entry in ('/opt/homebrew/bin', '/opt/homebrew/opt/llvm/bin',
+        self.assertEqual(entries[:2], ['/opt/homebrew/bin', str(self.home / '.local/bin')])
+        self.assertNotIn('/opt/homebrew/opt/llvm/bin', entries)
+        for entry in ('/opt/homebrew/bin',
                       str(self.home / '.local/bin'), '/usr/bin', '/bin'):
             self.assertIn(entry, entries)
 
@@ -587,7 +617,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), 'yes absent deferred  1')
         self.assertEqual(result.stderr, '')
-        self.assertEqual((self.home / 'zoxide-args').read_text().strip(), 'init zsh')
+        self.assertFalse((self.home / 'zoxide-args').exists())
 
     def test_shared_ssh_autostarts_tmux_only_without_remote_command(self):
         config = self.repo / 'stow/ssh/.ssh/config'
