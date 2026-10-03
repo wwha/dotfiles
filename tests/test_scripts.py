@@ -1,8 +1,11 @@
 import os
+import pty
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,7 +135,7 @@ sys.exit(1 if conflict else 0)
         result = self.run_script('install.sh', '--ssh')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.home / '.zshrc').resolve(), self.repo / 'stow/zsh/.zshrc')
-        self.assertTrue((self.home / '.config/dotfiles/zsh/rime-ice-update.zsh').is_symlink())
+        self.assertFalse((self.home / '.config/dotfiles/zsh/rime-ice-update.zsh').is_symlink())
         self.assertFalse((self.home / '.config').is_symlink())
         self.assertFalse((self.home / '.git-template').is_symlink())
         self.assertTrue((self.home / '.ssh/config').is_symlink())
@@ -372,6 +375,111 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output.read_text().splitlines(), ['1', 'unsaved', '1'])
 
+    def test_zoxide_replaces_z_plugin_and_jumps_to_recorded_directory(self):
+        if not shutil.which('zoxide', path=self.env['PATH']):
+            self.skipTest('zoxide is not installed')
+        omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
+        omz.parent.mkdir()
+        omz.write_text(':\n')
+        target = self.base / 'project with spaces'
+        target.mkdir()
+        env = dict(self.env, _ZO_DATA_DIR=str(self.base / 'zoxide-data'))
+        result = subprocess.run(
+            ['/bin/zsh', '-f', '-c',
+             'source "$1"; source "$1"; '
+             '(( ${plugins[(Ie)z]} == 0 )) || exit 1; '
+             'zoxide add -- "$2"; z project; print -r -- "$PWD"; '
+             'typeset -a hooks; hooks=("${(@M)chpwd_functions:#__zoxide_hook}"); print -r -- "${#hooks}"',
+             'probe', str(self.repo / 'stow/zsh/.zshrc'), str(target)],
+            env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [str(target), '1'])
+
+    def test_zsh_path_stays_unique_when_reloaded(self):
+        omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
+        omz.parent.mkdir()
+        omz.write_text(':\n')
+        inherited = '/opt/homebrew/bin:/usr/bin:/opt/homebrew/bin:/bin'
+        result = subprocess.run(
+            ['/bin/zsh', '-f', '-c', 'source "$1"; source "$1"; print -rl -- "${path[@]}"',
+             'probe', str(self.repo / 'stow/zsh/.zshrc')],
+            env=dict(self.env, PATH=inherited), cwd=self.repo,
+            text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        entries = result.stdout.splitlines()
+        self.assertEqual(len(entries), len(set(entries)))
+        for entry in ('/opt/homebrew/bin', '/opt/homebrew/opt/llvm/bin',
+                      str(self.home / '.local/bin'), '/usr/bin', '/bin'):
+            self.assertIn(entry, entries)
+
+    def test_direnv_requires_approval_and_restores_project_environment(self):
+        plugin = Path(os.environ['HOME']) / '.oh-my-zsh/plugins/direnv/direnv.plugin.zsh'
+        if not plugin.is_file() or not shutil.which('direnv', path=self.env['PATH']):
+            self.skipTest('direnv and its Oh My Zsh plugin are required')
+        omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
+        omz.parent.mkdir()
+        omz.write_text('for plugin in $plugins; do\n'
+                       '  [[ $plugin == direnv ]] && source "' + str(plugin) + '"\n'
+                       'done\n')
+        project = self.base / 'project with spaces'
+        (project / '.venv/bin').mkdir(parents=True)
+        (project / 'child').mkdir()
+        python = project / '.venv/bin/python'
+        python.write_text('#!/bin/sh\necho project-python\n')
+        python.chmod(0o755)
+        (project / '.envrc').write_text('export VIRTUAL_ENV="$PWD/.venv"\n'
+                                      'PATH_add "$VIRTUAL_ENV/bin"\n')
+        env = dict(self.env, VIRTUAL_ENV='previous-environment',
+                   XDG_CONFIG_HOME=str(self.home / '.config'),
+                   XDG_DATA_HOME=str(self.home / '.local/share'),
+                   DIRENV_CONFIG=str(self.home / '.config/direnv'))
+        for key in list(env):
+            if key.startswith('DIRENV_') and key != 'DIRENV_CONFIG':
+                env.pop(key)
+        result = subprocess.run(
+            ['/bin/zsh', '-f', '-c',
+             'source "$1"; (( $+functions[_direnv_hook] )) || exit 1; '
+             'original_path=$PATH; cd "$2"; '
+             '[[ $VIRTUAL_ENV == previous-environment ]] || exit 2; '
+             'direnv allow || exit 3; _direnv_hook; '
+             '[[ $VIRTUAL_ENV == "$PWD/.venv" ]] || exit 4; '
+             '[[ $(python) == project-python ]] || exit 5; '
+             'cd child; [[ $(python) == project-python ]] || exit 6; '
+             'cd "$3"; [[ $VIRTUAL_ENV == previous-environment ]] || exit 7; '
+             '[[ $PATH == $original_path ]] || exit 8; '
+             'print restored', 'probe', str(self.repo / 'stow/zsh/.zshrc'),
+             str(project), str(self.home)],
+            env=env, cwd=self.home, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('blocked', result.stderr)
+        self.assertEqual(result.stdout.strip(), 'restored')
+
+    def test_nvm_is_lazy_and_loads_on_first_node_command(self):
+        plugin = Path(os.environ['HOME']) / '.oh-my-zsh/plugins/nvm/nvm.plugin.zsh'
+        if not plugin.is_file():
+            self.skipTest('Oh My Zsh nvm plugin is not installed')
+        omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
+        omz.parent.mkdir()
+        omz.write_text('source "' + str(plugin) + '"\n')
+        nvm = self.home / '.nvm/nvm.sh'
+        nvm.parent.mkdir()
+        nvm.write_text('print loaded >> "$HOME/nvm-loads"\n'
+                       'node() { print fixture-node; }\n'
+                       'nvm() { print fixture-nvm; }\n')
+        env = dict(self.env)
+        for key in list(env):
+            if key.startswith('NVM_'):
+                env.pop(key)
+        result = subprocess.run(
+            ['/bin/zsh', '-f', '-c',
+             'source "$1"; [[ ! -e "$HOME/nvm-loads" ]] || exit 1; '
+             'node; node; nvm', 'probe', str(self.repo / 'stow/zsh/.zshrc')],
+            env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         ['fixture-node', 'fixture-node', 'fixture-nvm'])
+        self.assertEqual((self.home / 'nvm-loads').read_text().splitlines(), ['loaded'])
+
     def test_zsh_preserves_initializers_without_local_override(self):
         for name, body in {
             '.oh-my-zsh/oh-my-zsh.sh': 'export OMZ_LOADED=yes',
@@ -386,27 +494,60 @@ sys.exit(1 if conflict else 0)
             p.chmod(0o700)
         env = dict(self.env, TERM_PROGRAM='test', TMUX='', SSH_CONNECTION='')
         result = subprocess.run(['/bin/zsh', '-f', '-c',
-                                 'source "$1"; print -r -- "$OMZ_LOADED $CONDA_LOADED $NVM_LOADED $TEST_API_KEY $HOMEBREW_NO_ANALYTICS"',
+                                 'source "$1"; print -r -- "$OMZ_LOADED ${CONDA_LOADED:-absent} ${NVM_LOADED:-deferred} $TEST_API_KEY $HOMEBREW_NO_ANALYTICS"',
                                  'probe', str(self.repo / 'stow/zsh/.zshrc')],
                                 env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), 'yes yes yes  1')
+        self.assertEqual(result.stdout.strip(), 'yes absent deferred  1')
         self.assertEqual(result.stderr, '')
 
-    def test_shared_ssh_helpers_keep_preferences_and_reject_shell_metacharacters(self):
-        env = dict(self.env, TERM_PROGRAM='test', TMUX='', SSH_CONNECTION='')
-        probe = ('ssh() { print -rl -- "$@" >> "$HOME/ssh-args"; }; '
-                 'source "$1"; ssht host.example safe_session; sshp host.example; '
-                 'sshp "host;touch"; print -r -- done')
-        result = subprocess.run(['/bin/zsh', '-f', '-c', probe, 'probe',
-                                 str(self.repo / 'stow/zsh/.zshrc')],
-                                env=env, cwd=self.repo, text=True,
-                                capture_output=True, timeout=20)
+    def test_shared_ssh_autostarts_tmux_only_without_remote_command(self):
+        config = self.repo / 'stow/ssh/.ssh/config'
+        local = self.home / '.ssh/config.local'
+        local.parent.mkdir()
+        local.write_text('Host fixture.invalid fixture-raw.invalid\n'
+                         '  HostName server.invalid\n'
+                         'Host fixture-raw.invalid\n'
+                         '  RequestTTY yes\n'
+                         '  RemoteCommand none\n')
+        isolated = self.base / 'ssh_config'
+        isolated.write_text(config.read_text().replace('Include ~/.ssh/config.local',
+                                                      'Include ' + str(local)))
+        cases = [
+            (['fixture.invalid'], True, 'true'),
+            (['fixture-raw.invalid'], False, 'true'),
+            (['fixture.invalid', 'zsh'], False, 'auto'),
+            (['fixture.invalid', 'true'], False, 'auto'),
+            (['-s', 'fixture.invalid', 'sftp'], False, 'auto'),
+        ]
+        for args, autostart, tty in cases:
+            with self.subTest(args=args):
+                result = subprocess.run(['/usr/bin/ssh', '-G', '-F', str(isolated), *args],
+                                        text=True, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                values = dict(line.split(' ', 1) for line in result.stdout.splitlines())
+                self.assertEqual(values.get('remotecommand', 'none'),
+                                 '$SHELL -l -c "tmux new-session -A -s main"'
+                                 if autostart else 'none')
+                self.assertEqual(values['requesttty'], tty)
+                self.assertEqual(values['hostname'], 'server.invalid')
+                self.assertEqual(values['serveraliveinterval'], '30')
+                self.assertEqual(values['serveralivecountmax'], '3')
+
+    def test_ssh_tmux_uses_login_path_without_loading_interactive_config(self):
+        self.stub('tmux', 'printf "%s\\n" "$*" > "$HOME/tmux-args"')
+        (self.home / '.zprofile').write_text('export PATH="' + str(self.bin) + ':$PATH"\n')
+        (self.home / '.zshrc').write_text('exit 91\n')
+        config = self.repo / 'stow/ssh/.ssh/config'
+        command = next(line.strip().removeprefix('RemoteCommand ')
+                       for line in config.read_text().splitlines()
+                       if line.strip().startswith('RemoteCommand '))
+        result = subprocess.run(['/bin/zsh', '-f', '-c', command],
+                                env=dict(self.env, SHELL='/bin/zsh'), cwd=self.repo,
+                                text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.home / 'ssh-args').read_text().splitlines(), [
-            '-t', 'host.example', "exec zsh -l -c 'tmux new-session -s safe_session'",
-            'host.example'])
-        self.assertIn('unsupported characters', result.stderr)
+        self.assertEqual((self.home / 'tmux-args').read_text().strip(),
+                         'new-session -A -s main')
 
     def test_bun_is_not_loaded_from_local_override(self):
         (self.home / '.bun').mkdir()
@@ -429,13 +570,45 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), 'absent|absent|0')
 
-    def test_shared_zsh_starts_tmux_in_local_terminal_sessions(self):
-        env = dict(self.env, TERM_PROGRAM='Apple_Terminal', TMUX='', SSH_CONNECTION='')
-        self.stub('tmux', 'touch "$HOME/tmux-called"; exit 91')
-        result = subprocess.run(['/bin/zsh', '-f', '-c', 'tmux() { : > "$HOME/tmux-called"; return 1; }; source "$1"', 'probe', str(self.repo / 'stow/zsh/.zshrc')],
-                                env=env, cwd=self.repo, text=True, capture_output=True, timeout=20)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((self.home / 'tmux-called').exists())
+    def test_shared_zsh_does_not_autostart_tmux(self):
+        omz = self.home / '.oh-my-zsh/oh-my-zsh.sh'
+        omz.parent.mkdir()
+        omz.write_text('autoload -Uz compinit; compinit -u -d "$HOME/.zcompdump"\n')
+        nvm = self.home / '.nvm/nvm.sh'
+        nvm.parent.mkdir()
+        nvm.write_text('export PATH="' + str(self.bin) + ':$PATH"\n')
+        self.stub('tmux', 'printf "%s\\n" "$*" "$HOMEBREW_NO_ANALYTICS" >> "$HOME/tmux-args"')
+        cases = [
+            ('Apple_Terminal', '', '', True, True, False),
+            ('iTerm.app', '', '', True, True, False),
+            ('vscode', '', '', True, True, False),
+            ('Apple_Terminal', 'fixture', '', True, True, False),
+            ('Apple_Terminal', '', 'fixture', True, True, False),
+            ('Apple_Terminal', '', '', False, True, False),
+            ('Apple_Terminal', '', '', True, False, False),
+        ]
+        output = self.home / 'tmux-args'
+        for terminal, tmux, ssh, interactive, tty, expected in cases:
+            with self.subTest(terminal=terminal, tmux=tmux, ssh=ssh,
+                              interactive=interactive, tty=tty):
+                output.unlink(missing_ok=True)
+                env = dict(self.env, TERM_PROGRAM=terminal, TMUX=tmux,
+                           SSH_CONNECTION=ssh, TERM='xterm-256color')
+                master, slave = pty.openpty()
+                try:
+                    result = subprocess.run(
+                        ['/bin/zsh', '-f', *(['-i'] if interactive else []),
+                         '-c', 'source "$1"', 'probe', str(self.repo / 'stow/zsh/.zshrc')],
+                        stdin=slave if tty else subprocess.DEVNULL,
+                        stdout=slave if tty else subprocess.PIPE, stderr=subprocess.PIPE,
+                        env=env, cwd=self.repo, text=True, timeout=20)
+                finally:
+                    os.close(slave)
+                    os.close(master)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output.exists(), expected)
+                if expected:
+                    self.assertEqual(output.read_text().splitlines(), ['new-session', '1'])
 
     def test_tmux_ignores_local_override_and_limits_clipboard_access(self):
         tmux = shutil.which('tmux')
@@ -479,7 +652,7 @@ sys.exit(1 if conflict else 0)
         (self.home / '.zshrc').write_text('keep shell config')
         self.stub('brew', 'printf "%s\\n" "$@" >> "$HOME/brew-args"')
         self.stub('curl', 'printf "%s\\n" "$*" > "$HOME/curl-args"; while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then shift; : > "$1"; fi; shift; done')
-        self.stub('git', 'mkdir -p "$4/tools"; : > "$4/oh-my-zsh.sh"')
+        self.stub('git', 'printf "%s\\n" "$*" >> "$HOME/git-args"; mkdir -p "$4/tools" "$4/.git"; : > "$4/oh-my-zsh.sh"')
         self.stub('vim', 'printf "%s\\n" "$@" > "$HOME/vim-args"')
         result = self.run_script('install.sh', 'deps')
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -491,6 +664,28 @@ sys.exit(1 if conflict else 0)
                       (self.home / 'curl-args').read_text())
         self.assertIn('--file=' + str(self.repo / 'Brewfile'), (self.home / 'brew-args').read_text())
         self.assertFalse((self.home / '.gitconfig').exists())
+        plugin_root = self.home / '.oh-my-zsh/custom/plugins'
+        for plugin in ('zsh-autosuggestions', 'zsh-syntax-highlighting'):
+            self.assertTrue((plugin_root / plugin / '.git').is_dir())
+            self.assertIn('https://github.com/zsh-users/' + plugin + '.git',
+                          (self.home / 'git-args').read_text())
+        (self.home / 'git-args').unlink()
+        result = self.run_script('install.sh', 'deps')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.home / 'git-args').exists())
+
+    def test_plugin_updates_respect_custom_directory(self):
+        custom = self.home / 'custom plugins'
+        self.env['ZSH_CUSTOM'] = str(custom)
+        for plugin in ('zsh-autosuggestions', 'zsh-syntax-highlighting'):
+            (custom / 'plugins' / plugin / '.git').mkdir(parents=True)
+        self.stub('brew', 'exit 0')
+        self.stub('git', 'printf "%s\\n" "$@" >> "$HOME/git-args"')
+        result = self.run_script('install.sh', 'update')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / 'git-args').read_text().splitlines(), [
+            '-C', str(custom / 'plugins/zsh-autosuggestions'), 'pull', '--ff-only',
+            '-C', str(custom / 'plugins/zsh-syntax-highlighting'), 'pull', '--ff-only'])
 
     def git(self, *args):
         return subprocess.run(['/usr/bin/git', *args], cwd=self.repo, env=self.env,
