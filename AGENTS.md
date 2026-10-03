@@ -23,3 +23,20 @@ and symlinks. Read docs/CONTEXT.md when changing installation or backup semantic
 - Submit changes through a PR; the owner merges after required CI passes.
 
 For Cloud setup and branch protection, follow the workflow section in README.md.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues. Read `docs/agents/issue-tracker.md`
+before reading or publishing issues.
+
+### Triage labels
+
+Use the five canonical triage labels. Read `docs/agents/triage-labels.md`
+before applying triage labels.
+
+### Domain docs
+
+This repo uses a single-context layout. Read `docs/agents/domain.md`
+before exploring domain concepts or architectural decisions.
