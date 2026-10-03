@@ -375,7 +375,7 @@ call plug#begin('~/.vim/plugged')
 " Essential plugins
 Plug '/opt/homebrew/opt/fzf'           " Homebrew fzf Vim runtime
 Plug 'junegunn/fzf.vim'                " File and content finder
-Plug 'scrooloose/nerdtree'             " File explorer
+Plug 'preservim/nerdtree'             " File explorer
 Plug 'dense-analysis/ale'              " Linter
 Plug 'christoomey/vim-tmux-navigator'   " Vim/tmux pane navigation
 
@@ -394,9 +394,8 @@ nnoremap <silent> <leader>b :Buffers<CR>
 let g:ale_linters_explicit = 1
 let g:ale_linters = {
 \   'python': ['ruff'],
-\   'javascript': ['eslint'],
-\   'c': ['clangd'],
-\   'cpp': ['clangd'],
+\   'c': ['clang'],
+\   'cpp': ['clang'],
 \   'markdown': ['markdownlint'],
 \   'sh': [],
 \   'zsh': [],

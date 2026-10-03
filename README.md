@@ -56,17 +56,17 @@ last. `update` uses `git pull --ff-only` for existing plugin Git checkouts.
 
 The Brewfile contains command-line tools used by the shared configurations and
 their checks. It is a selected list, not a snapshot of the machine or a version
-lock. macOS's built-in Zsh, Git and Vim are used. Homebrew LLVM is keg-only, so its commands
-are not linked into Homebrew's shared `bin` directory. The shared Zsh config
-adds LLVM's `bin` directory to `PATH` and keeps PATH entries unique.
+lock. macOS's built-in Zsh, Git and Vim are used. C/C++ linting uses Apple
+Clang; Homebrew provides clang-format for formatting. The shared Zsh config
+orders Homebrew tools before user scripts and keeps PATH entries unique.
 Vim plugin details are in [the Vim guide](docs/vim_plugin_user_manual.md).
 
 ## Shared and private settings
 
 Oh My Zsh lazily loads NVM from `~/.nvm/nvm.sh` on the first `nvm`, `node`,
 `npm`, or other supported Node command. Node shebang scripts do not trigger
-these shell wrappers. Zsh keeps the Tailscale command alias. zoxide provides `z` for directory jumping, replacing the Oh My
-Zsh `z` plugin. Oh My Zsh manages completion initialization. Conda and the Rime
+these shell wrappers. Zsh keeps the Tailscale command alias. The Oh My Zsh `zoxide` plugin initializes `z` for directory jumping, replacing
+the `z` plugin. Oh My Zsh already enables `HIST_IGNORE_SPACE`. Oh My Zsh manages completion initialization. Conda and the Rime
 update helper are no longer initialized by the shared configuration.
 
 Git identity is private and required. Set it in `~/.gitconfig.local`; shared Git
