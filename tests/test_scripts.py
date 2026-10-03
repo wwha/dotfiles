@@ -394,7 +394,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         values = output.read_text().splitlines()
         self.assertEqual(values[:3], ['1', '0', '1'])
-        self.assertEqual(values[3:], ['1', '0'])
+        self.assertEqual(values[3:], ['0', '0'])
 
     def test_vim_python_and_markdown_fix_on_save_and_mapping(self):
         plugin_home = Path(os.environ['HOME']) / '.vim'
@@ -441,6 +441,24 @@ sys.exit(1 if conflict else 0)
                                 env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output.read_text().splitlines(), ['1', 'unsaved', '1'])
+
+    def test_vim_save_scope_and_buffer_close_mapping(self):
+        target = self.base / 'plain.txt'
+        target.write_text('keep spaces  \n')
+        output = self.base / 'vim-scope'
+        script = self.base / 'scope.vim'
+        script.write_text(
+            'edit ' + str(target) + '\nwrite\n'
+            'vsplit\nenew\ncall feedkeys(",bd", "xt")\n'
+            'call writefile([string(winnr("$")), string(tabpagenr("$")), '
+            'string(has_key(g:ale_fixers, "*")), string(&textwidth), '
+            'string(&termguicolors), maparg(",w", "n")], "' + str(output) + '")\nqa!\n')
+        result = subprocess.run(['/usr/bin/vim', '-N', '-u', str(self.repo / 'stow/vim/.vimrc'),
+                                 '-i', 'NONE', '-n', '-es', '-S', str(script)],
+                                env=self.env, cwd=self.repo, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_text(), 'keep spaces  \n')
+        self.assertEqual(output.read_text().splitlines(), ['2', '1', '0', '0', '1', ':w<CR>'])
 
     def test_zoxide_replaces_z_plugin_and_jumps_to_recorded_directory(self):
         if not shutil.which('zoxide', path=self.env['PATH']):
@@ -704,16 +722,54 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, '')
         self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '1500')
-        command = tmux_run('show-options', '-sv', 'copy-command').stdout.strip()
-        self.assertTrue(command)
+        self.assertEqual(tmux_run('show-options', '-sv', 'copy-command').stdout.strip(), '')
         self.assertEqual(tmux_run('show-options', '-sv', 'set-clipboard').stdout.strip(), 'external')
-        self.stub('pbcopy', 'cat > "$HOME/copied"')
-        self.stub('xclip', 'touch "$HOME/unexpected-xclip"; exit 91')
-        copied = subprocess.run(['/bin/sh', '-c', command], input='clipboard text',
-                                env=env, text=True, capture_output=True, timeout=10)
-        self.assertEqual(copied.returncode, 0, copied.stderr)
-        self.assertEqual((self.home / 'copied').read_text(), 'clipboard text')
-        self.assertFalse((self.home / 'unexpected-xclip').exists())
+        self.assertEqual(tmux_run('show-options', '-gv', 'allow-passthrough').stdout.strip(), 'on')
+        self.assertEqual(tmux_run('show-options', '-gv', 'default-terminal').stdout.strip(), 'tmux-256color')
+        self.assertEqual(tmux_run('show-options', '-gv', 'default-command').stdout.strip(), '')
+
+    def test_tmux_new_windows_and_splits_follow_directory_and_renumber(self):
+        tmux = shutil.which('tmux', path=self.env['PATH'])
+        if not tmux:
+            self.skipTest('tmux is required')
+        socket_dir = tempfile.TemporaryDirectory(prefix='df-layout-', dir='/tmp')
+        self.addCleanup(socket_dir.cleanup)
+        socket = str(Path(socket_dir.name) / 'socket')
+        env = dict(self.env)
+        env.pop('TMUX', None)
+
+        def run(*args):
+            result = subprocess.run([tmux, '-S', socket, *args], env=env,
+                                    text=True, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, '')
+            return result.stdout.strip()
+
+        self.addCleanup(lambda: subprocess.run([tmux, '-S', socket, 'kill-server'],
+                                              env=env, capture_output=True))
+        run('-f', str(self.repo / 'stow/tmux/.tmux.conf'), 'new-session', '-d',
+            '-s', 'test', '-c', str(self.home), '/bin/zsh -f')
+        run('set-option', '-g', 'default-command', '/bin/zsh -f')
+        for option, expected in [('focus-events', 'on'), ('renumber-windows', 'on'),
+                                 ('status-interval', '5'), ('visual-activity', 'off')]:
+            self.assertEqual(run('show-options', '-gv', option), expected)
+        self.assertEqual(run('show-options', '-gwv', 'monitor-activity'), 'on')
+        run('send-keys', '-l', 'cd -- ' + shlex.quote(str(self.repo)))
+        run('send-keys', 'Enter')
+        deadline = time.monotonic() + 5
+        while run('display-message', '-p', '#{pane_current_path}') != str(self.repo):
+            self.assertLess(time.monotonic(), deadline, 'Shell did not change directory')
+            time.sleep(0.05)
+        for key, command in [('c', 'new-window'), ('v', 'split-window'),
+                             ('s', 'split-window'), ('c', 'new-window')]:
+            binding = shlex.split(next(line for line in run('list-keys', '-T', 'prefix').splitlines()
+                                       if line.split()[3] == key))
+            run(*binding[binding.index(command):])
+            self.assertEqual(run('display-message', '-p', '#{pane_current_path}'), str(self.repo))
+        self.assertEqual(run('list-panes', '-t', 'test:2', '-F', '#{pane_index}').splitlines(),
+                         ['1', '2', '3'])
+        run('kill-window', '-t', 'test:2')
+        self.assertEqual(run('list-windows', '-F', '#{window_index}').splitlines(), ['1', '2'])
 
     def test_dependencies_are_explicit_and_fetch_latest_plugins_only_on_request(self):
         (self.home / '.zshrc').write_text('keep shell config')

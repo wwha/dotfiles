@@ -15,7 +15,6 @@
 "    -> Spell checking
 "    -> Misc
 "    -> Helper functions
-"    -> Custom functions
 "
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
@@ -35,14 +34,17 @@ filetype indent on
 
 " Set to auto read when a file is changed from the outside
 set autoread
-au FocusGained,BufEnter * checktime
+augroup dotfiles_autoread
+    autocmd!
+    autocmd FocusGained,BufEnter * checktime
+augroup END
 
 " With a map leader it's possible to do extra key combinations
 " like <leader>w saves the current file
 let mapleader = ","
 
 " Fast saving
-nmap <leader>w :w!<cr>
+nnoremap <leader>w :w<cr>
 
 
 
@@ -52,22 +54,12 @@ nmap <leader>w :w!<cr>
 " Set 7 lines to the cursor - when moving vertically using j/k
 set so=7
 
-" Avoid garbled characters in Chinese language windows OS
-let $LANG='en'
-set langmenu=en
-source $VIMRUNTIME/delmenu.vim
-source $VIMRUNTIME/menu.vim
-
 " Turn on the Wild menu
 set wildmenu
 
 " Ignore compiled files
 set wildignore=*.o,*~,*.pyc
-if has("win16") || has("win32")
-    set wildignore+=.git\*,.hg\*,.svn\*
-else
-    set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/.DS_Store
-endif
+set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/.DS_Store
 
 " Always show current position
 set ruler
@@ -112,11 +104,6 @@ set novisualbell
 set t_vb=
 set tm=500
 
-" Properly disable sound on errors on MacVim
-if has("gui_macvim")
-    autocmd GUIEnter * set vb t_vb=
-endif
-
 " Add a bit extra margin to the left
 set foldcolumn=1
 
@@ -136,10 +123,8 @@ set listchars=tab:▸\ ,eol:¬
 " Enable syntax highlighting
 syntax enable
 
-" Enable 256 colors palette in Gnome Terminal
-if $COLORTERM == 'gnome-terminal'
-    set t_Co=256
-endif
+" iTerm2 supports true color; tmux advertises RGB for its xterm client.
+set termguicolors
 
 try
     colorscheme desert
@@ -147,14 +132,6 @@ catch
 endtry
 
 set background=dark
-
-" Set extra options when running in GUI mode
-if has("gui_running")
-    set guioptions-=T
-    set guioptions-=e
-    set t_Co=256
-    set guitablabel=%M\ %t
-endif
 
 " Use Unix as the standard file type
 set ffs=unix,dos,mac
@@ -178,13 +155,13 @@ set smarttab
 " 1 tab == 4 spaces
 set shiftwidth=4
 set tabstop=4
+set softtabstop=-1
 
-" Linebreak on 500 characters
+" Wrap for display without inserting hard line breaks
 set lbr
-set tw=500
+set textwidth=0
 
 set ai "Auto indent
-set si "Smart indent
 set wrap "Wrap lines
 
 
@@ -193,54 +170,61 @@ set wrap "Wrap lines
 """"""""""""""""""""""""""""""
 " Visual mode pressing * or # searches for the current selection
 " Super useful! From an idea by Michael Naumann
-vnoremap <silent> * :<C-u>call VisualSelection('', '')<CR>/<C-R>=@/<CR><CR>
-vnoremap <silent> # :<C-u>call VisualSelection('', '')<CR>?<C-R>=@/<CR><CR>
+vnoremap <silent> * :<C-u>call VisualSelection()<CR>/<C-R>=@/<CR><CR>
+vnoremap <silent> # :<C-u>call VisualSelection()<CR>?<C-R>=@/<CR><CR>
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " => Moving around, tabs, windows and buffers
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Map <Space> to / (search) and Ctrl-<Space> to ? (backwards search)
-map <space> /
-map <C-space> ?
+nnoremap <space> /
+nnoremap <C-space> ?
 
 " Disable highlight when <leader><cr> is pressed
-map <silent> <leader><cr> :noh<cr>
+nnoremap <silent> <leader><cr> :noh<cr>
 
-" Smart way to move between windows
-map <C-j> <C-W>j
-map <C-k> <C-W>k
-map <C-h> <C-W>h
-map <C-l> <C-W>l
+" vim-tmux-navigator handles Ctrl-h/j/k/l across Vim and tmux panes.
+let g:tmux_navigator_disable_when_zoomed = 1
 
 " Close the current buffer
-map <leader>bd :Bclose<cr>:tabclose<cr>gT
+nnoremap <leader>bd :Bclose<cr>
 
 " Close all the buffers
-map <leader>ba :bufdo bd<cr>
+nnoremap <leader>ba :bufdo bd<cr>
 
-map <leader>l :bnext<cr>
-map <leader>h :bprevious<cr>
+nnoremap <leader>l :bnext<cr>
+nnoremap <leader>h :bprevious<cr>
 
 " Useful mappings for managing tabs
-map <leader>tn :tabnew<cr>
-map <leader>to :tabonly<cr>
-map <leader>tc :tabclose<cr>
-map <leader>tm :tabmove
-map <leader>t<leader> :tabnext
+nnoremap <leader>tn :tabnew<cr>
+nnoremap <leader>to :tabonly<cr>
+nnoremap <leader>tc :tabclose<cr>
+nnoremap <leader>tm :tabmove
+nnoremap <leader>t<leader> :tabnext
 
 " Let 'tl' toggle between this and the last accessed tab
-let g:lasttab = 1
-nmap <Leader>tl :exe "tabn ".g:lasttab<CR>
-au TabLeave * let g:lasttab = tabpagenr()
+let g:dotfiles_lasttab_winid = get(g:, 'dotfiles_lasttab_winid', 0)
+nnoremap <Leader>tl :call <SID>LastTab()<CR>
+augroup dotfiles_tabs
+    autocmd!
+    autocmd TabLeave * let g:dotfiles_lasttab_winid = win_getid()
+augroup END
+
+function! s:LastTab()
+    let target = win_id2tabwin(g:dotfiles_lasttab_winid)[0]
+    if target > 0
+        execute 'tabnext ' . target
+    endif
+endfunction
 
 
 " Opens a new tab with the current buffer's path
 " Super useful when editing files in the same directory
-map <leader>te :tabedit <C-r>=expand("%:p:h")<cr>/
+nnoremap <leader>te :tabedit <C-r>=expand("%:p:h")<cr>/
 
 " Switch CWD to the directory of the open buffer
-map <leader>cd :cd %:p:h<cr>:pwd<cr>
+nnoremap <leader>cd :cd %:p:h<cr>:pwd<cr>
 
 " Specify the behavior when switching between buffers
 try
@@ -250,7 +234,10 @@ catch
 endtry
 
 " Return to last edit position when opening files (You want this!)
-au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+augroup dotfiles_last_position
+    autocmd!
+    autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+augroup END
 
 
 """"""""""""""""""""""""""""""
@@ -267,26 +254,13 @@ set statusline=\ %{HasPaste()}%F%m%r%h\ %w\ \ CWD:\ %r%{getcwd()}%h\ \ \ Line:\ 
 " => Editing mappings
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Remap VIM 0 to first non-blank character
-map 0 ^
+nnoremap 0 ^
 
 " Move a line of text using ALT+[jk] or Command+[jk] on mac
-nmap <leader>j mz:m+<cr>`z
-nmap <leader>k mz:m-2<cr>`z
-vmap <M-j> :m'>+<cr>`<my`>mzgv`yo`z
-vmap <M-k> :m'<-2<cr>`>my`<mzgv`yo`z
-
-" Delete trailing white space on save, useful for some filetypes ;)
-fun! CleanExtraSpaces()
-    let save_cursor = getpos(".")
-    let old_query = getreg('/')
-    silent! %s/\s\+$//e
-    call setpos('.', save_cursor)
-    call setreg('/', old_query)
-endfun
-
-if has("autocmd")
-    autocmd BufWritePre *.txt,*.js,*.py,*.wiki,*.sh,*.coffee :if get(g:, 'dotfiles_trim_whitespace_on_save', 0) | call CleanExtraSpaces() | endif
-endif
+nnoremap <leader>j mz:m+<cr>`z
+nnoremap <leader>k mz:m-2<cr>`z
+xnoremap <M-j> :m'>+<cr>`<my`>mzgv`yo`z
+xnoremap <M-k> :m'<-2<cr>`>my`<mzgv`yo`z
 
 " Map <j,k> to esc
 inoremap jk <Esc>
@@ -297,33 +271,34 @@ inoremap jk <Esc>
 " This allows yanking from Vim over SSH/Tmux to the local clipboard.
 " Requires a terminal that supports OSC 52 (e.g., iTerm2, Kitty, Alacritty).
 function! Osc52Yank()
-    let b64 = system('base64 | tr -d "\n"', getreg('@'))
-    let b64 = substitute(b64, '\n', '', 'g')
+    let b64 = substitute(system('base64', getreg('0')), '\n', '', 'g')
+    if v:shell_error
+        echoerr 'OSC 52: base64 failed'
+        return
+    endif
     let sequence = "\e]52;c;" . b64 . "\x07"
     if $TMUX != ''
         let sequence = "\ePtmux;" . substitute(sequence, "\e", "\e\e", 'g') . "\e\\"
     endif
-    silent! call writefile([sequence], "/dev/tty", "b")
+    call writefile([sequence], "/dev/tty", "b")
 endfunction
 
-" Automatically yank to OSC 52 after any yank operation
-augroup osc52
-    autocmd!
-    autocmd TextYankPost * if get(g:, 'dotfiles_osc52_yank', 0) && v:event.operator == 'y' | call Osc52Yank() | endif
-augroup END
+" Explicit clipboard copy; ordinary yanks keep their Vim register behavior.
+nnoremap <silent> <leader>y yy:call Osc52Yank()<CR>
+xnoremap <silent> <leader>y y:call Osc52Yank()<CR>
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " => Spell checking
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Pressing ,ss will toggle and untoggle spell checking
-map <leader>ss :setlocal spell!<cr>
+nnoremap <leader>ss :setlocal spell!<cr>
 
 " Shortcuts using <leader>
-map <leader>sn ]s
-map <leader>sp [s
-map <leader>sa zg
-map <leader>s? z=
+nnoremap <leader>sn ]s
+nnoremap <leader>sp [s
+nnoremap <leader>sa zg
+nnoremap <leader>s? z=
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -333,13 +308,13 @@ map <leader>s? z=
 noremap <Leader>m mmHmt:%s/<C-V><cr>//ge<cr>'tzt'm
 
 " Quickly open a buffer for scribble
-map <leader>q :e ~/buffer<cr>
+nnoremap <leader>q :e ~/buffer<cr>
 
 " Quickly open a markdown buffer for scribble
-map <leader>x :e ~/buffer.md<cr>
+nnoremap <leader>x :e ~/buffer.md<cr>
 
 " Toggle paste mode on and off
-map <leader>pp :setlocal paste!<cr>
+nnoremap <leader>pp :setlocal paste!<cr>
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -356,93 +331,37 @@ endfunction
 " Don't close window, when deleting a buffer
 command! Bclose call <SID>BufcloseCloseIt()
 function! <SID>BufcloseCloseIt()
-    let l:currentBufNum = bufnr("%")
-    let l:alternateBufNum = bufnr("#")
-
-    if buflisted(l:alternateBufNum)
-        buffer #
-    else
-        bnext
+    let current = bufnr('%')
+    if getbufvar(current, '&modified')
+        echoerr 'No write since last change; save the buffer before closing it'
+        return
     endif
-
-    if bufnr("%") == l:currentBufNum
-        new
+    let replacement = bufnr('#')
+    if replacement == current || !buflisted(replacement)
+        let candidates = filter(getbufinfo({'buflisted': 1}), 'v:val.bufnr != current')
+        let replacement = empty(candidates) ? bufadd('') : candidates[0].bufnr
     endif
-
-    if buflisted(l:currentBufNum)
-        execute("bdelete ".l:currentBufNum)
-    endif
+    call setbufvar(replacement, '&buflisted', 1)
+    for window in getwininfo()
+        if window.bufnr == current
+            call win_execute(window.winid, 'buffer ' . replacement)
+        endif
+    endfor
+    execute 'bdelete ' . current
 endfunction
 
-function! CmdLine(str)
-    call feedkeys(":" . a:str)
+function! VisualSelection() range
+    let saved_unnamed = getreginfo('"')
+    let saved_zero = getreginfo('0')
+    try
+        execute "normal! vgvy"
+        let pattern = escape(@", "\\/.*'$^~[]")
+        let @/ = substitute(pattern, '\n$', '', '')
+    finally
+        call setreg('"', saved_unnamed)
+        call setreg('0', saved_zero)
+    endtry
 endfunction
-
-function! VisualSelection(direction, extra_filter) range
-    let l:saved_reg = @"
-    execute "normal! vgvy"
-
-    let l:pattern = escape(@", "\\/.*'$^~[]")
-    let l:pattern = substitute(l:pattern, "\n$", "", "")
-
-    if a:direction == 'gv'
-        call CmdLine("Ack '" . l:pattern . "' " )
-    elseif a:direction == 'replace'
-        call CmdLine("%s" . '/'. l:pattern . '/')
-    endif
-
-    let @/ = l:pattern
-    let @" = l:saved_reg
-endfunction
-
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" => Custom functions
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Functions for creating python scripts title
-func SetPyTitle()
-call setline(1, "\#!/usr/bin/python")
-call setline(2, "\# -*- encoding=utf8 -*-")
-call setline(3, "\"\"\"")
-call setline(4, "\# @Created Time : ".strftime("%m-%d-%Y"))
-call setline(5, "\# @Description : ")
-call setline(6, "\"\"\"")
-normal G
-normal o
-normal o
-endfunc
-autocmd bufnewfile *.py if get(g:, 'dotfiles_enable_file_templates', 0) | call SetPyTitle() | endif
-
-" Functions for createing c code title
-func SetCTitle()
-call setline(1, "/* -*- encoding=utf8 -*-*/")
-call setline(2, "/* copyright/licensing */")
-call setline(3, "/* @Created Time : ".strftime("%m-%d-%Y")." */")
-call setline(4, "/* includes */")
-call setline(5, "/* defines */")
-call setline(6, "/* external declarations */")
-call setline(7, "/* typedefs */")
-call setline(8, "/* global variable declarations */")
-call setline(9, "/* function prototypes */")
-call setline(10, "#include<stdio.h>")
-call setline(11, "\int main(int argc, char *argv[]) {")
-call setline(12,"    return 0;")
-call setline(13, "\}")
-normal G
-normal o
-endfunc
-"autocmd bufnewfile *.c call SetCTitle()
-
-" Functions for creating shell scripts title
-func SetShTitle()
-call setline(1, "\#!/bin/zsh")
-call setline(2, "\# -*- encoding=utf8 -*-")
-call setline(4, "\# @Created Time : ".strftime("%m-%d-%Y"))
-call setline(5, "\# @Description : ")
-normal G
-normal o
-normal o
-endfunc
-autocmd bufnewfile *.sh if get(g:, 'dotfiles_enable_file_templates', 0) | call SetShTitle() | endif
 
 " Vim-plug configuration
 " Run :PlugInstall in Vim to install plugins
@@ -450,18 +369,25 @@ if !empty(glob('~/.vim/autoload/plug.vim'))
 call plug#begin('~/.vim/plugged')
 
 " Essential plugins
-Plug 'ctrlpvim/ctrlp.vim'              " Fuzzy file finder
+Plug '/opt/homebrew/opt/fzf'           " Homebrew fzf Vim runtime
+Plug 'junegunn/fzf.vim'                " File and content finder
 Plug 'scrooloose/nerdtree'             " File explorer
 Plug 'dense-analysis/ale'              " Linter
+Plug 'christoomey/vim-tmux-navigator'   " Vim/tmux pane navigation
 
 call plug#end()
 endif
 
-" CtrlP
-let g:ctrlp_map = '<c-p>'
-let g:ctrlp_cmd = 'CtrlP'
+" fzf.vim; the fallback also covers Vim launched without interactive Zsh.
+if empty($FZF_DEFAULT_COMMAND)
+    let $FZF_DEFAULT_COMMAND = 'fd --type f --hidden --exclude .git'
+endif
+nnoremap <silent> <C-p> :Files<CR>
+nnoremap <leader>rg :Rg<Space>
+nnoremap <silent> <leader>b :Buffers<CR>
 
 " ALE Configuration
+let g:ale_linters_explicit = 1
 let g:ale_linters = {
 \   'python': ['ruff'],
 \   'javascript': ['eslint'],
@@ -481,7 +407,6 @@ let g:ale_pattern_options = {
 let g:ale_fix_on_save = 1
 
 let g:ale_fixers = {
-\   '*': ['remove_trailing_lines', 'trim_whitespace'],
 \   'python': ['ruff', 'ruff_format'],
 \   'c': ['clang-format'],
 \   'cpp': ['clang-format'],
@@ -498,7 +423,7 @@ let g:ale_sign_warning = '--'
 " Navigation shortcuts
 nmap <silent> <leader>an <Plug>(ale_next_wrap)
 nmap <silent> <leader>ap <Plug>(ale_previous_wrap)
-nmap <silent> <leader>af :ALEFix<cr>
+nnoremap <silent> <leader>af :ALEFix<cr>
 
 " NERDTree Configuration
 nnoremap <C-n> :NERDTreeToggle<CR>
