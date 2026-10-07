@@ -1,25 +1,23 @@
 # Working on dotfiles
 
-This repository manages a personal macOS environment through shared configuration
-and symlinks. Read docs/CONTEXT.md when changing installation or backup semantics.
+This repository manages a personal macOS environment through shared configuration and symlinks.
 
-## Verification
+Dependencies are managed with Homebrew through the Brewfile.
 
-- Run `zsh tests/check.zsh --static` for syntax and Git configuration checks.
-- On macOS, run `zsh tests/check.zsh --all` for isolated behavior tests as well.
-- In Codex Cloud, run static checks and report macOS behavior tests as pending CI.
-- For script changes, add regression coverage through the command-line interface
-  in `tests/test_scripts.py`. Use temporary copies and command substitutes for
-  package downloads, system settings, and notifications.
+Preserve local overrides (`*.local`, `local.*`) and credentials outside Git.
+Never validate changes by running install, restore, network settings, or sourcing
+interactive shell configuration against the user's HOME; use isolated tests.
 
-## Boundaries
+## Verification commands
 
-- Personal installation supports macOS only. Cloud is a development environment.
-- Never run install, restore, network settings, or source interactive shell
-  configuration against the user's HOME to validate changes. Use the test suite.
-- Preserve local overrides (`*.local`, `local.*`) and credentials outside Git.
-- Keep Zsh syntax; ShellCheck does not validate Zsh. Git hooks may rewrite files
-  and must not be invoked as the CI check command.
-- Submit changes through a PR; the owner merges after required CI passes.
+- `zsh tests/check.zsh --static`: syntax and Git configuration checks.
+- `zsh tests/check.zsh --all`: isolated behavior tests on macOS.
 
-For Cloud setup and branch protection, follow the workflow section in README.md.
+## Task-specific instructions
+
+- When changing scripts or configuration, or validating changes, read
+  [Testing](docs/agents/testing.md).
+- When preparing a PR or working in Codex Cloud, read
+  [Workflow](docs/agents/workflow.md).
+- When changing installation or backup semantics, read
+  [Project context](docs/CONTEXT.md).
