@@ -29,6 +29,7 @@ class Scripts(unittest.TestCase):
         self.env.pop('ZSH_CUSTOM', None)
         for cmd in ('curl', 'brew', 'sudo', 'chsh', 'networksetup', 'osascript'):
             self.stub(cmd, 'exit 91')
+        self.stub('brew', '[ \"$1 $2\" = \"bundle check\" ] && exit 0; exit 91')
         self.stub_stow()
 
     def stub(self, name, body):
@@ -222,6 +223,21 @@ sys.exit(1 if conflict else 0)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.home / '.gitconfig').exists())
         self.assertEqual((self.home / '.vimrc').read_text(), 'original')
+
+    def test_link_requires_complete_brewfile_before_backups(self):
+        self.stub('brew', 'printf "%s\\n" "$*" > "$HOME/brew-check"; exit 1')
+        (self.home / '.zshrc').write_text('original')
+        result = self.run_script('install.sh', '--backup')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('./install.sh deps', result.stderr)
+        self.assertEqual((self.home / '.zshrc').read_text(), 'original')
+        self.assertFalse((self.home / '.dotfiles_backups').exists())
+        self.assertIn('bundle check --no-upgrade --verbose --file=' + str(self.repo / 'Brewfile'),
+                      (self.home / 'brew-check').read_text())
+        (self.home / 'brew-check').unlink()
+        result = self.run_script('install.sh', '--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.home / 'brew-check').exists())
 
     def test_dependency_failure_does_not_link_configuration(self):
         result = self.run_script('install.sh', 'deps')

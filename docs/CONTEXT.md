@@ -10,7 +10,9 @@ Shared configuration is maintained in this repository and installed on personal 
 
 **Installation**: Linking shared configuration into a user's home directory while preserving local overrides and displaced configuration.
 
-**Dependency setup**: Explicit preparation of the packages and plugins used by shared configuration, separate from installation.
+**Dependency setup**: Explicit preparation of the packages and plugins used by shared configuration, separate from installation. Installation checks all Brewfile packages before
+changing HOME paths; missing dependencies require explicit dependency setup.
+A dry-run previews links without this check.
 
 **Conflict backup**: The original file, directory or symlink displaced by installation, retained for per-file rollback. A saved symlink does not include its target's contents.
 
