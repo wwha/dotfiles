@@ -10,3 +10,7 @@ package downloads, system settings, and notifications.
 
 Preserve Zsh syntax; ShellCheck does not validate Zsh.
 Use the check script for CI verification; Git hooks may rewrite files.
+
+ALE formatting integration tests wait for `User ALEFixPost` with a bounded
+timeout rather than sleeping for a fixed duration. Keep the slow Prettier
+fixture so cold starts cannot silently bypass formatting assertions.

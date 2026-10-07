@@ -421,6 +421,12 @@ sys.exit(1 if conflict else 0)
         (self.home / '.vim').mkdir()
         (self.home / '.vim/autoload').symlink_to(plugin_home / 'autoload')
         (self.home / '.vim/plugged').symlink_to(plugin_home / 'plugged')
+        # Exercise a cold/slow formatter: a fixed two-second sleep must not
+        # decide whether asynchronous formatting has completed.
+        prettier = shutil.which('prettier')
+        self.stub('prettier', 'if [ ! -e "$HOME/prettier-started" ]; then '
+                  'touch "$HOME/prettier-started"; sleep 3; fi\n'
+                  + 'exec ' + shlex.quote(prettier) + ' "$@"')
         for ext, before, expected in (
                 ('py', 'import os\nx=  1\n', 'x = 1\n'),
                 ('py', 'while(True):\n    print("1")\n', 'while True:\n    print("1")\n'),
@@ -433,7 +439,14 @@ sys.exit(1 if conflict else 0)
                     target.write_text(before)
                     output = self.base / 'fixed'
                     script = self.base / 'fix.vim'
-                    script.write_text('edit ' + str(target) + '\n' + action + '\nsleep 2\n'
+                    script.write_text('let g:fix_finished = 0\n'
+                                      'autocmd User ALEFixPost let g:fix_finished = 1\n'
+                                      'edit ' + str(target) + '\n' + action + '\n'
+                                      'let started = reltime()\n'
+                                      'while !g:fix_finished && reltimefloat(reltime(started)) < 10\n'
+                                      '  sleep 20m\n'
+                                      'endwhile\n'
+                                      'if !g:fix_finished | cquit 2 | endif\n'
                                       'call writefile(getline(1,"$"),"' + str(output) + '")\nqa!\n')
                     result = subprocess.run(
                         ['/usr/bin/vim', '-N', '-u', str(self.repo / 'stow/vim/.vimrc'),
