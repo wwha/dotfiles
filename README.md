@@ -29,6 +29,8 @@ The default Stow packages are `zsh`, `git`, `vim` and `tmux`. SSH is opt-in:
 ./install.sh --ssh
 ```
 
+Installing GNU Stow alone is not sufficient: run `./install.sh deps` before
+activating this checkout on an existing Mac as well as on a new Mac.
 Dependency setup installs GNU Stow and uv along with the other declared tools.
 It also prepares Oh My Zsh, its custom plugins, vim-plug and Vim plugins before
 linking. Git identity and private SSH settings still require manual setup.
@@ -46,7 +48,11 @@ does not upgrade packages already installed. `install.sh update` updates
 Homebrew formulae, Oh My Zsh and its Git-installed custom plugins when present,
 and Vim plugins when vim-plug is
 installed. Vim's plugin declarations use upstream's latest versions. Neither
-command links configuration; linking does not download software.
+command links configuration; linking does not download software. Before changing any HOME paths, linking
+checks the entire Brewfile for missing packages without requiring upgrades. If
+Homebrew or dependencies are missing, or the check fails, installation stops and
+prompts you to run `./install.sh deps`. `--dry-run` skips this check so you can
+preview links before dependency setup.
 
 `deps` clones `zsh-users/zsh-autosuggestions` and
 `zsh-users/zsh-syntax-highlighting` from GitHub into

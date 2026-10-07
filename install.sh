@@ -103,6 +103,19 @@ if [[ "$mode" == deps || "$mode" == update ]]; then
     exit 0
 fi
 
+# A link-only activation must not enable configuration with missing Brewfile tools.
+# Previews stay offline and usable before dependency setup.
+if (( ! dry_run )); then
+    command -v brew >/dev/null || {
+        print -u2 'Homebrew is required. Install Homebrew, then run ./install.sh deps.'; exit 1
+    }
+    if ! HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_BUNDLE_NO_UPGRADE=1 \
+            brew bundle check --no-upgrade --verbose --file="$BASEDIR/Brewfile"; then
+        print -u2 'Brewfile dependencies are missing or could not be checked; nothing was changed. Run ./install.sh deps, then retry.'
+        exit 1
+    fi
+fi
+
 command -v stow >/dev/null || {
     print -u2 'GNU Stow is required. Run ./install.sh deps, then retry.'; exit 1
 }
