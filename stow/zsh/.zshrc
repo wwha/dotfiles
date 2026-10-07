@@ -87,6 +87,7 @@ plugins=(git
 )
 
 zstyle ':omz:plugins:nvm' lazy yes
+zstyle ':omz:plugins:nvm' lazy-cmd pi
 
 # Configure fzf before Oh My Zsh initializes its plugin.
 export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'

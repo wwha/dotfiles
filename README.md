@@ -64,7 +64,7 @@ Vim plugin details are in [the Vim guide](docs/vim_plugin_user_manual.md).
 ## Shared and private settings
 
 Oh My Zsh lazily loads NVM from `~/.nvm/nvm.sh` on the first `nvm`, `node`,
-`npm`, or other supported Node command. Node shebang scripts do not trigger
+`npm`, or other supported Node command, including `pi`. Node shebang scripts do not trigger
 these shell wrappers. Zsh keeps the Tailscale command alias. The Oh My Zsh `zoxide` plugin initializes `z` for directory jumping, replacing
 the `z` plugin. Oh My Zsh already enables `HIST_IGNORE_SPACE`. Oh My Zsh manages completion initialization. Conda and the Rime
 update helper are no longer initialized by the shared configuration.
@@ -189,6 +189,9 @@ Use sessions to separate workspaces or projects, and windows for tasks such as
 editing, running a service, and viewing logs. Use panes when simultaneous views
 are useful; they are optional, not the main way to organize work. Multiple
 clients attached to one session share its current window and running programs.
+
+tmux enables extended keys using CSI-u encoding. A compatible terminal can
+preserve modified key combinations for applications running inside tmux.
 
 The optional shared SSH configuration requires OpenSSH 10.0 or newer for
 `Match command`; check `/usr/bin/ssh -V` before installing it. macOS CI uses
