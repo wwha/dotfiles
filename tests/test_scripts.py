@@ -756,7 +756,7 @@ sys.exit(1 if conflict else 0)
                 if expected:
                     self.assertEqual(output.read_text().splitlines(), ['new-session', '1'])
 
-    def test_tmux_ignores_local_override_and_limits_clipboard_access(self):
+    def test_tmux_ignores_local_override_and_allows_application_clipboard(self):
         tmux = shutil.which('tmux')
         if not tmux:
             tmux = next((p for p in ('/opt/homebrew/bin/tmux', '/usr/local/bin/tmux')
@@ -784,7 +784,7 @@ sys.exit(1 if conflict else 0)
         self.assertEqual(result.stderr, '')
         self.assertEqual(tmux_run('show-options', '-gv', 'display-panes-time').stdout.strip(), '1500')
         self.assertEqual(tmux_run('show-options', '-sv', 'copy-command').stdout.strip(), '')
-        self.assertEqual(tmux_run('show-options', '-sv', 'set-clipboard').stdout.strip(), 'external')
+        self.assertEqual(tmux_run('show-options', '-sv', 'set-clipboard').stdout.strip(), 'on')
         self.assertEqual(tmux_run('show-options', '-gv', 'allow-passthrough').stdout.strip(), 'off')
         self.assertEqual(tmux_run('show-options', '-gv', 'default-terminal').stdout.strip(), 'tmux-256color')
         self.assertEqual(tmux_run('show-options', '-gv', 'default-command').stdout.strip(), '')

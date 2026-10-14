@@ -156,25 +156,25 @@ class Navigation(unittest.TestCase):
 
                 wait_for(copied_by_tmux)
 
-                # Unrequested output must neither reach the client clipboard nor
-                # replace tmux's buffer. Emit via a file so shell echo cannot
-                # contain the escape sequences we are trying to detect.
-                payload = b'unrequested clipboard probe'
+                # Applications can copy with OSC 52; raw passthrough stays blocked.
+                payload = b'application clipboard probe'
                 raw = b'\x1b]52;c;' + base64.b64encode(payload) + b'\x07'
-                wrapped = b'\x1bPtmux;' + raw.replace(b'\x1b', b'\x1b\x1b') + b'\x1b\\'
+                blocked_payload = b'passthrough clipboard probe'
+                blocked_raw = b'\x1b]52;c;' + base64.b64encode(blocked_payload) + b'\x07'
+                wrapped = b'\x1bPtmux;' + blocked_raw.replace(b'\x1b', b'\x1b\x1b') + b'\x1b\\'
                 emitter = base / 'emit.py'
                 emitter.write_text('import sys\n'
                                    'sys.stdout.buffer.write(' + repr(raw + wrapped) + ')\n'
-                                   'print("blocked-output-complete", flush=True)\n')
-                previous_buffer = run('show-buffer')
+                                   'print("clipboard-output-complete", flush=True)\n')
                 offset = len(output)
                 run('send-keys', '-t', shell_pane, 'C-c')
                 run('send-keys', '-t', shell_pane,
                     shlex.quote(sys.executable) + ' ' + shlex.quote(str(emitter)), 'Enter')
-                wait_for(lambda: 'blocked-output-complete' in run('capture-pane', '-p', '-t', shell_pane))
+                wait_for(lambda: 'clipboard-output-complete' in run('capture-pane', '-p', '-t', shell_pane))
+                wait_for(lambda: payload in clipboard_payloads())
                 time.sleep(0.2)  # Allow the PTY reader to consume the final output.
-                self.assertNotIn(payload, clipboard_payloads())
-                self.assertEqual(run('show-buffer'), previous_buffer)
+                self.assertNotIn(blocked_payload, clipboard_payloads())
+                self.assertEqual(run('show-buffer'), payload.decode())
             finally:
                 subprocess.run([tmux, '-S', socket, 'kill-server'], env=env,
                                capture_output=True, timeout=10)
