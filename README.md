@@ -22,12 +22,7 @@ cd dotfiles
 ./install.sh
 ```
 
-The default Stow packages are `zsh`, `git`, `vim` and `tmux`. SSH is opt-in:
-
-```sh
-./install.sh --dry-run --ssh
-./install.sh --ssh
-```
+The default Stow packages are `zsh`, `git`, `vim`, `tmux` and `ssh`.
 
 Installing GNU Stow alone is not sufficient: run `./install.sh deps` before
 activating this checkout on an existing Mac as well as on a new Mac.
@@ -199,7 +194,7 @@ clients attached to one session share its current window and running programs.
 tmux enables extended keys using CSI-u encoding. A compatible terminal can
 preserve modified key combinations for applications running inside tmux.
 
-The optional shared SSH configuration requires OpenSSH 10.0 or newer for
+The shared SSH configuration requires OpenSSH 10.0 or newer for
 `Match command`; check `/usr/bin/ssh -V` before installing it. macOS CI uses
 macOS 26 to test the system client with this capability.
 Ordinary `ssh host` requests a terminal and runs the server's login shell to
