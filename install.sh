@@ -5,7 +5,6 @@ BASEDIR="${0:A:h}"
 mode=link
 dry_run=0
 backup=0
-ssh_config=0
 
 if [[ "${1:-}" == deps || "${1:-}" == update ]]; then
     mode=$1
@@ -15,14 +14,13 @@ fi
 while (( $# )); do
     case "$1" in
         -h|--help)
-            print 'Usage: install.sh [--dry-run] [--backup] [--ssh]'
+            print 'Usage: install.sh [--dry-run] [--backup]'
             print '       install.sh deps | update'
             print 'Default: previewable Stow links only. deps installs missing dependencies; update upgrades them.'
             exit 0 ;;
         -v|--version) print 'install.sh version 2.0.0'; exit 0 ;;
         --dry-run) dry_run=1 ;;
         --backup) backup=1 ;;
-        --ssh) ssh_config=1 ;;
         *) print -u2 "Unknown option: $1"; exit 1 ;;
     esac
     shift
@@ -31,7 +29,7 @@ done
 [[ "$(uname)" == Darwin ]] || { print -u2 'Installation supports macOS only'; exit 1; }
 
 if [[ "$mode" == deps || "$mode" == update ]]; then
-    (( ! dry_run && ! backup && ! ssh_config )) || {
+    (( ! dry_run && ! backup )) || {
         print -u2 'Linking options cannot be combined with deps or update.'; exit 1
     }
     command -v brew >/dev/null || { print -u2 'Install Homebrew first: https://brew.sh'; exit 1; }
@@ -60,7 +58,10 @@ if [[ "$mode" == deps || "$mode" == update ]]; then
             mv "$omz_tmp" "$HOME/.oh-my-zsh"
         fi
         if command -v vim >/dev/null && [[ -r "$HOME/.vim/autoload/plug.vim" ]]; then
-            vim -Nu "$BASEDIR/stow/vim/.vimrc" -i NONE -es -c PlugInstall -c qall
+            if ! vim -Nu "$BASEDIR/stow/vim/.vimrc" -i NONE -es -c PlugInstall -c qall </dev/null >/dev/null 2>&1; then
+                print -u2 'Run vim and execute :PlugInstall to see the error.'
+                exit 1
+            fi
         fi
     else
         brew update
@@ -79,7 +80,10 @@ if [[ "$mode" == deps || "$mode" == update ]]; then
             zsh "$HOME/.oh-my-zsh/tools/upgrade.sh"
         fi
         if [[ -r "$HOME/.vim/autoload/plug.vim" ]] && command -v vim >/dev/null; then
-            vim -Nu "$BASEDIR/stow/vim/.vimrc" -i NONE -es -c PlugUpdate -c qall
+            if ! vim -Nu "$BASEDIR/stow/vim/.vimrc" -i NONE -es -c PlugUpdate -c qall </dev/null >/dev/null 2>&1; then
+                print -u2 'Run vim and execute :PlugUpdate to see the error.'
+                exit 1
+            fi
         fi
     fi
     plugin_root="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins"
@@ -120,8 +124,7 @@ command -v stow >/dev/null || {
     print -u2 'GNU Stow is required. Run ./install.sh deps, then retry.'; exit 1
 }
 
-packages=(zsh git vim tmux)
-(( ssh_config )) && packages+=(ssh)
+packages=(zsh git vim tmux ssh)
 typeset -a conflicts
 conflicts=()
 

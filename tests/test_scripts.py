@@ -120,7 +120,7 @@ sys.exit(1 if conflict else 0)
         result = self.run_script('install.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.home / '.gitconfig').is_symlink())
-        self.assertFalse((self.home / '.ssh').exists())
+        self.assertEqual((self.home / '.ssh/config').resolve(), self.repo / 'stow/ssh/.ssh/config')
         self.assertFalse((self.home / '.local/bin').exists())
         hook = self.home / '.git-template/hooks/pre-commit'
         self.assertTrue(hook.is_symlink())
@@ -133,10 +133,9 @@ sys.exit(1 if conflict else 0)
         if not stow:
             self.skipTest('GNU Stow is not installed')
         (self.bin / 'stow').unlink()
-        result = self.run_script('install.sh', '--ssh')
+        result = self.run_script('install.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.home / '.zshrc').resolve(), self.repo / 'stow/zsh/.zshrc')
-        self.assertFalse((self.home / '.config/dotfiles/zsh/rime-ice-update.zsh').is_symlink())
         self.assertFalse((self.home / '.config').is_symlink())
         self.assertFalse((self.home / '.git-template').is_symlink())
         self.assertTrue((self.home / '.ssh/config').is_symlink())
@@ -198,10 +197,10 @@ sys.exit(1 if conflict else 0)
         saved_directory.rename(self.home / '.tmux.conf')
         self.assertEqual((self.home / '.tmux.conf/marker').read_text(), 'keep')
 
-    def test_install_ssh_is_opt_in_and_refuses_symlinked_parent(self):
+    def test_install_default_ssh_preserves_conflicts_and_refuses_symlinked_parent(self):
         (self.home / '.ssh').mkdir()
         (self.home / '.ssh/config').write_text('private ssh config')
-        result = self.run_script('install.sh', '--ssh')
+        result = self.run_script('install.sh')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.home / '.ssh/config').read_text(), 'private ssh config')
         self.assertFalse((self.home / '.zshrc').exists())
@@ -210,7 +209,7 @@ sys.exit(1 if conflict else 0)
         target = self.base / 'ssh-target'
         target.mkdir()
         (self.home / '.ssh').symlink_to(target, target_is_directory=True)
-        result = self.run_script('install.sh', '--ssh')
+        result = self.run_script('install.sh')
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.home / '.gitconfig').exists())
 
@@ -839,7 +838,7 @@ sys.exit(1 if conflict else 0)
 for arg in "$@"; do
     case "$arg" in
         --file=*)
-            for package in stow uv; do
+            for package in stow uv bat; do
                 grep -qx "brew \\"$package\\"" "${arg#--file=}" || exit 93
             done ;;
     esac
@@ -867,6 +866,28 @@ printf "%s\\n" "$@" >> "$HOME/brew-args"''')
         result = self.run_script('install.sh', 'deps')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((self.home / 'git-args').exists())
+
+    def test_vim_dependency_commands_close_streams_and_report_failures(self):
+        self.prepare_install()
+        self.stub('brew', 'exit 0')
+        self.stub('curl', 'while [ "$#" -gt 0 ]; do if [ "$1" = -o ]; then shift; : > "$1"; fi; shift; done')
+        self.stub('vim', '''
+for fd in 0 1 2; do
+    [ "$(/usr/sbin/lsof -a -p $$ -d "$fd" -Fn | /usr/bin/sed -n 's/^n//p')" = /dev/null ] || exit 94
+done
+printf 'hidden stdout'
+printf 'hidden stderr' >&2
+exit "$(cat "$HOME/vim-status")"
+''')
+        for mode, command in [('deps', 'PlugInstall'), ('update', 'PlugUpdate')]:
+            for status in (0, 1):
+                with self.subTest(mode=mode, status=status):
+                    (self.home / 'vim-status').write_text(str(status))
+                    result = self.run_script('install.sh', mode)
+                    self.assertEqual(result.returncode, status, result.stderr)
+                    self.assertNotIn('hidden', result.stdout + result.stderr)
+                    if status:
+                        self.assertIn(f'Run vim and execute :{command} to see the error.', result.stderr)
 
     def test_plugin_updates_respect_custom_directory(self):
         custom = self.home / 'custom plugins'
